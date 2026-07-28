@@ -1,0 +1,55 @@
+---
+description: SportMatchr product vision, stack, and current build plan
+alwaysApply: true
+---
+
+# SportMatchr
+
+## Product
+Location-based pickup sports matcher (NOT dating). Users find nearby people to play a sport when alone/bored.
+
+## Launch wedge (law until density exists)
+- **Pocket:** Glebe / Centretown (incl. Old Ottawa South / Brewer)
+- **Primary sport:** Pickleball
+- Do **not** expand courts, sports, cities, tournaments, or sponsors until this pocket has real weekly games without manual seeding.
+- Source: `constants/wedge.ts`
+
+Core modes:
+- **Sessions** — scheduled / recurring pickups; join → group chat
+- **Solos** — instant “let’s play” with people free now
+- **Map** — courts/venues (wedge courts first)
+- **Profiles + soft trust** — phone verify early; photo/ID later
+
+## Safety / verification (scale with density)
+1. Meet at **public mapped courts** only; never private addresses
+2. **SafetyGate** before Message / Let’s play / Join
+3. **Phone** verify as the early trust gate; photo/ID optional until abuse appears
+4. **Verified-only** on Solos defaults **OFF** until Solos has supply
+5. In-chat safety reminder + Report on profiles
+6. Later: block, meetup check-in, share-trip-with-friend, no-show reputation
+
+## Retention (after the whistle)
+- I’m here / check-in
+- Rate session / would play again
+- Rematch same crew
+- Recurring “same time next week”
+- Show-up / no-show soft reputation
+
+## Exhilaration levers
+- Live pulse (“X people ready near you”)
+- Go live on Solos
+- Ratings, games played, streaks that mean you *played*
+- Host tools: fill spots, who’s coming, reminders
+
+## Visual identity
+**Court Fresh** — light athletic surfaces + teal accent (trust + energy):
+- Cool gray bg `#F4F6F8` / white cards `#FFFFFF`
+- Ink `#0F172A` / muted `#64748B`
+- Teal `#0D9488` (primary), bright `#14B8A6`, soft `#CCFBF1`
+Teal CTAs use white text. Source: `constants/theme.ts`.
+Do not use black/gold luxury, muddy mustard, Halloween orange, or purple.
+
+## Backend
+Supabase core loop only: auth, profiles, sessions (+ join), solos presence, chat, show-up.
+Env: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+Falls back to mock when unset. Schema: `supabase/migrations/`.

@@ -1,0 +1,11 @@
+-- Seed template for wedge pocket (run after creating host accounts)
+-- Replace host UUIDs with real auth.users ids before executing.
+
+-- Example recurring Tuesday open play (commented until real host ids exist):
+-- insert into public.sessions (host_id, sport, title, description, location, court_id, starts_at, max_players, recurring_rule, intensity)
+-- values
+--   ('HOST_UUID', 'Pickleball', 'Tuesday Open Play',
+--    'Recurring Tue open play. Beginners welcome.',
+--    'Lansdowne Park / Aberdeen Pavilion area', 'lansdowne',
+--    date_trunc('week', now()) + interval '1 day' + interval '19 hours',
+--    8, 'Every Tue 7:00 PM', 'casual');
