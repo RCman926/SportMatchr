@@ -10,13 +10,26 @@ import {
 import { FREE_COURT_COUNT, OTTAWA_COURTS, OttawaCourt } from '../../constants/ottawaCourts';
 import { SportFilterBar } from '../../components/SportPicker';
 import { WEDGE, isWedgeNeighbourhood } from '../../constants/wedge';
+import { currentOttawaSeason } from '../../constants/sports';
+import { useLocationStore } from '../../lib/locationStore';
+import { formatDistanceKm, haversineKm } from '../../lib/location';
+import { listFreePlaces } from '../../lib/places';
+import { theme } from '../../constants/theme';
 
 type SeasonFilter = 'all' | 'winter' | 'summer' | 'year-round' | 'multi';
 type TypeFilter = 'all' | 'free' | 'paid';
+type CourtWithDistance = OttawaCourt & { distanceKm: number };
+
+function seasonFilterDefault(): SeasonFilter {
+  const s = currentOttawaSeason();
+  if (s === 'Winter') return 'winter';
+  if (s === 'Summer') return 'summer';
+  return 'all';
+}
 
 function buildMapSrc(court: OttawaCourt | null) {
   const pad = 0.025;
-  const focus = court ?? OTTAWA_COURTS[0];
+  const focus = court ?? listFreePlaces()[0];
   if (!focus) {
     return 'https://www.openstreetmap.org/export/embed.html?bbox=-75.82%2C45.30%2C-75.50%2C45.50&layer=mapnik';
   }
@@ -37,11 +50,11 @@ function EmbeddedOttawaMap({ court }: { court: OttawaCourt | null }) {
   if (Platform.OS !== 'web') {
     return (
       <View style={styles.mapFallback}>
-        <Text style={styles.mapFallbackTitle}>{court ? court.name : 'Ottawa courts'}</Text>
+        <Text style={styles.mapFallbackTitle}>{court ? court.name : 'Ottawa free places'}</Text>
         <Text style={styles.mapFallbackSub}>
           {court
             ? `${court.neighbourhood} · ${court.lat.toFixed(4)}, ${court.lng.toFixed(4)}`
-            : 'Pick a court in the list below.'}
+            : 'Pick a free place in the list below.'}
         </Text>
       </View>
     );
@@ -68,11 +81,16 @@ const SEASON_LABEL: Record<string, string> = {
 };
 
 export default function MapScreen() {
-  const [sportFilter, setSportFilter] = useState<string | null>(WEDGE.primarySport);
-  const [seasonFilter, setSeasonFilter] = useState<SeasonFilter>('all');
+  const [sportFilter, setSportFilter] = useState<string | null>(null);
+  const [seasonFilter, setSeasonFilter] = useState<SeasonFilter>(seasonFilterDefault);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('free');
   const [selectedId, setSelectedId] = useState<string | null>(WEDGE.priorityCourtIds[0] ?? null);
   const [copied, setCopied] = useState(false);
+
+  const coords = useLocationStore((s) => s.coords);
+  const area = useLocationStore((s) => s.area);
+  const source = useLocationStore((s) => s.source);
+  const refresh = useLocationStore((s) => s.refresh);
 
   const courts = useMemo(() => {
     const filtered = OTTAWA_COURTS.filter((c) => {
@@ -80,17 +98,15 @@ export default function MapScreen() {
       if (sportFilter && !c.sports.includes(sportFilter)) return false;
       if (seasonFilter === 'all') return true;
       if (seasonFilter === 'multi') return c.season === 'multi';
-      return c.season === seasonFilter || c.season === 'multi';
+      return c.season === seasonFilter || c.season === 'multi' || c.season === 'year-round';
     });
-    return [...filtered].sort((a, b) => {
-      const ap = WEDGE.priorityCourtIds.includes(a.id as (typeof WEDGE.priorityCourtIds)[number]) ? 0 : 1;
-      const bp = WEDGE.priorityCourtIds.includes(b.id as (typeof WEDGE.priorityCourtIds)[number]) ? 0 : 1;
-      if (ap !== bp) return ap - bp;
-      const aw = isWedgeNeighbourhood(a.neighbourhood) ? 0 : 1;
-      const bw = isWedgeNeighbourhood(b.neighbourhood) ? 0 : 1;
-      return aw - bw;
-    });
-  }, [sportFilter, seasonFilter, typeFilter]);
+    return filtered
+      .map((c) => ({
+        ...c,
+        distanceKm: haversineKm(coords, { lat: c.lat, lng: c.lng }),
+      }))
+      .sort((a, b) => a.distanceKm - b.distanceKm) as CourtWithDistance[];
+  }, [sportFilter, seasonFilter, typeFilter, coords]);
 
   useEffect(() => {
     if (!courts.find((c) => c.id === selectedId)) {
@@ -99,6 +115,17 @@ export default function MapScreen() {
   }, [courts, selectedId]);
 
   const selected = courts.find((c) => c.id === selectedId) ?? courts[0] ?? null;
+
+  const jumpNearMe = async () => {
+    await refresh();
+    const c = useLocationStore.getState().coords;
+    const nearest = [...courts].sort(
+      (a, b) =>
+        haversineKm(c, { lat: a.lat, lng: a.lng }) -
+        haversineKm(c, { lat: b.lat, lng: b.lng })
+    )[0];
+    if (nearest) setSelectedId(nearest.id);
+  };
 
   const grouped = useMemo(() => {
     const order: OttawaCourt['season'][] = ['winter', 'summer', 'year-round', 'multi'];
@@ -126,10 +153,22 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Courts</Text>
+      <Text style={styles.header}>Free places</Text>
       <Text style={styles.sub}>
-        {WEDGE.pocketName} first · {WEDGE.primarySport} · {FREE_COURT_COUNT}+ free Ottawa spots
+        Near you · free first · {FREE_COURT_COUNT}+ public spots · any activity
       </Text>
+
+      <View style={styles.locBar}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.locLabel}>
+            {source === 'gps' ? 'You are near' : 'Default area'}
+          </Text>
+          <Text style={styles.locValue}>{area}</Text>
+        </View>
+        <TouchableOpacity style={styles.locBtn} onPress={jumpNearMe} activeOpacity={0.85}>
+          <Text style={styles.locBtnText}>Near me</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.rowFilters}>
         {([
@@ -175,8 +214,8 @@ export default function MapScreen() {
       {selected && (
         <View style={styles.selectedCard}>
           <Text style={styles.selectedLabel}>
-            Selected · {selected.type === 'free' ? 'Free' : 'Paid'} ·{' '}
-            {SEASON_LABEL[selected.season]}
+            Selected · {formatDistanceKm(selected.distanceKm)} ·{' '}
+            {selected.type === 'free' ? 'Free' : 'Paid'} · {SEASON_LABEL[selected.season]}
           </Text>
           <Text style={styles.selectedName}>{selected.name}</Text>
           <Text style={styles.selectedMeta}>{selected.neighbourhood}</Text>
@@ -223,7 +262,10 @@ export default function MapScreen() {
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.hood}>{c.neighbourhood}</Text>
+                  <Text style={styles.hood}>
+                    {c.neighbourhood} · {formatDistanceKm(c.distanceKm)}
+                    {isWedgeNeighbourhood(c.neighbourhood) ? ' · wedge' : ''}
+                  </Text>
                   <Text style={styles.sports}>{c.sports.join(' · ')}</Text>
                   {c.notes ? <Text style={styles.notes}>{c.notes}</Text> : null}
                   <Text style={styles.tapHint}>{on ? 'Showing on map' : 'Tap to show on map'}</Text>
@@ -241,6 +283,26 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F6F8', padding: 16 },
   header: { fontSize: 28, fontWeight: '800', color: '#0F172A' },
   sub: { fontSize: 14, color: '#64748B', marginBottom: 10, lineHeight: 20 },
+  locBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 10,
+  },
+  locLabel: { color: '#0D9488', fontWeight: '800', fontSize: 11 },
+  locValue: { color: '#0F172A', fontWeight: '600', fontSize: 13, marginTop: 2 },
+  locBtn: {
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  locBtnText: { color: '#0F766E', fontWeight: '800', fontSize: 12 },
   rowFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   miniChip: {
     backgroundColor: '#FFFFFF',

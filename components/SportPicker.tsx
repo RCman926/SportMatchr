@@ -11,6 +11,8 @@ import {
 import {
   OTTAWA_SPORT_CATEGORIES,
   OTTAWA_POPULAR_BY_SEASON,
+  OTTAWA_POPULAR_SPORTS,
+  getSeasonalPopularSports,
   OttawaSport,
 } from '../constants/sports';
 
@@ -206,11 +208,11 @@ export function SportFilterBar({
   onChange: (sport: string | null) => void;
   includeAll?: boolean;
 }) {
-  const chips = [
-    ...OTTAWA_POPULAR_BY_SEASON.Winter,
-    ...OTTAWA_POPULAR_BY_SEASON.Summer,
-    ...OTTAWA_POPULAR_BY_SEASON['Year-round'],
-  ];
+  const chips = useMemo(() => {
+    const seasonal = getSeasonalPopularSports();
+    const rest = OTTAWA_POPULAR_SPORTS.filter((s) => !seasonal.includes(s));
+    return [...seasonal, ...rest];
+  }, []);
 
   return (
     <View style={styles.filterWrap}>
@@ -246,7 +248,7 @@ export function SportFilterBar({
           );
         })}
       </ScrollView>
-      <Text style={styles.scrollHint}>Swipe chips left ← → right for more (incl. Pickleball)</Text>
+      <Text style={styles.scrollHint}>Swipe for more activities — volleyball, shinny, tai chi…</Text>
     </View>
   );
 }

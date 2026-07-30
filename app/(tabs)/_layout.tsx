@@ -1,5 +1,14 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
+import { theme } from '../../constants/theme';
+
+function TabLabel({ label, focused }: { label: string; focused: boolean }) {
+  return (
+    <Text style={[styles.tab, focused && styles.tabOn]} numberOfLines={1}>
+      {label}
+    </Text>
+  );
+}
 
 export default function TabLayout() {
   return (
@@ -7,55 +16,81 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: true,
         headerStyle: {
-          backgroundColor: '#FFFFFF',
+          backgroundColor: theme.surface,
           borderBottomWidth: 1,
-          borderBottomColor: '#E2E8F0',
+          borderBottomColor: theme.border,
         },
-        headerTintColor: '#0D9488',
-        headerTitleStyle: { fontWeight: '700', color: '#0F172A' },
+        headerTintColor: theme.accent,
+        headerTitleStyle: {
+          fontFamily: theme.fonts.display,
+          fontSize: 20,
+          color: theme.ink,
+          letterSpacing: 0.5,
+        },
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#E2E8F0',
+          backgroundColor: theme.surface,
+          borderTopColor: theme.border,
+          height: 58,
+          paddingTop: 4,
         },
-        tabBarActiveTintColor: '#0D9488',
-        tabBarInactiveTintColor: '#64748B',
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: theme.accent,
+        tabBarInactiveTintColor: theme.muted,
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Home',
-          tabBarIcon: () => <Text style={{ fontSize: 18 }}>🏠</Text>,
+          title: 'Play',
+          tabBarIcon: () => null,
+          tabBarLabel: ({ focused }) => <TabLabel label="Play" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="solos"
         options={{
-          title: 'Solos',
-          tabBarIcon: () => <Text style={{ fontSize: 18 }}>⚡</Text>,
+          title: 'Right now',
+          tabBarIcon: () => null,
+          tabBarLabel: ({ focused }) => <TabLabel label="Now" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="map"
         options={{
-          title: 'Map',
-          tabBarIcon: () => <Text style={{ fontSize: 18 }}>🗺️</Text>,
+          title: 'Places',
+          tabBarIcon: () => null,
+          tabBarLabel: ({ focused }) => <TabLabel label="Places" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="sessions"
         options={{
-          title: 'Sessions',
-          tabBarIcon: () => <Text style={{ fontSize: 18 }}>📅</Text>,
+          title: 'Your games',
+          tabBarIcon: () => null,
+          tabBarLabel: ({ focused }) => <TabLabel label="Games" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: () => <Text style={{ fontSize: 18 }}>👤</Text>,
+          title: 'You',
+          tabBarIcon: () => null,
+          tabBarLabel: ({ focused }) => <TabLabel label="You" focused={focused} />,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tab: {
+    fontFamily: theme.fonts.bodyMed,
+    fontSize: 12,
+    color: theme.muted,
+    marginBottom: 8,
+  },
+  tabOn: {
+    color: theme.accent,
+    fontFamily: theme.fonts.bodyBold,
+  },
+});

@@ -1,11 +1,12 @@
 /**
- * Launch wedge — density before geography.
- * One pocket + one primary sport until weekly games happen without manual seeding.
+ * Prove-it city: Ottawa (multi-activity free places).
+ * Glebe / Centretown is a strong pocket — not a single-sport monopoly.
+ * Next cities (after unaided density): Montreal, Toronto.
  */
 
 export const WEDGE = {
   city: 'Ottawa',
-  /** Primary density pocket labels (neighbourhood match) */
+  /** Strong density pocket labels (neighbourhood match) */
   pocketName: 'Glebe / Centretown',
   pocketNeighbourhoods: [
     'The Glebe',
@@ -15,17 +16,41 @@ export const WEDGE = {
     'Downtown / Glebe',
     'Old Ottawa South',
   ] as const,
-  /** Primary sport for cold-start liquidity */
-  primarySport: 'Pickleball' as const,
-  /** Secondary sports still shown, but not the seeding focus */
-  secondarySports: ['Basketball', 'Tennis', 'Soccer'] as const,
-  /** Court ids to surface first in Create / Map */
-  priorityCourtIds: ['lansdowne', 'brewer', 'nepean'] as const,
+  /**
+   * Default chip when no season override — multi-sport; season chips preferred in UI.
+   * @deprecated Prefer getSeasonalPopularSports() — kept for older imports.
+   */
+  primarySport: 'Basketball' as const,
+  /** Highlight activities for seeding (all get people) */
+  focusSports: [
+    'Beach Volleyball',
+    'Volleyball',
+    'Basketball',
+    'Soccer',
+    'Shinny',
+    'Badminton',
+    'Cricket',
+    'Baseball',
+    'Tennis',
+    'Pickleball',
+    'Running',
+    'Outdoor Yoga',
+    'Tai Chi',
+  ] as const,
+  /** Court ids to surface first in Create / Map (free, multi-use) */
+  priorityCourtIds: [
+    'lansdowne',
+    'brewer',
+    'mooneys',
+    'majors-hill',
+    'nepean-point',
+    'dow-rink',
+  ] as const,
   copy: {
-    homeSub: 'Pickup · Glebe / Centretown · Pickleball first',
-    pulseArea: 'Glebe / Centretown · live now',
+    homeSub: 'Free places near you — any sport, any pace.',
+    pulseArea: 'Ottawa · who’s around right now',
     seedHint:
-      'Win this pocket first: weekly pickleball at public courts. Expand sports and neighbourhoods only after strangers play without you.',
+      'Host across sports at free public places. Expand to Montreal & Toronto after strangers meet without you.',
   },
 } as const;
 

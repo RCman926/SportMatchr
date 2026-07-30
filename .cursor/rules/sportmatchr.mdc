@@ -5,51 +5,55 @@ alwaysApply: true
 
 # SportMatchr
 
-## Product
-Location-based pickup sports matcher (NOT dating). Users find nearby people to play a sport when alone/bored.
+## Dream vs Now (read this first)
+**Dream (destination — document only, not current UI):** Adult life gets quieter. SportMatchr becomes the network that gets people moving again — games *and* gentle circles (tai chi, outdoor yoga) — then funds flying **regular athletes** worldwide. Later: venues, events, maybe new courts. Full write-up: `docs/VISION.md`.
 
-## Launch wedge (law until density exists)
-- **Pocket:** Glebe / Centretown (incl. Old Ottawa South / Brewer)
-- **Primary sport:** Pickleball
-- Do **not** expand courts, sports, cities, tournaments, or sponsors until this pocket has real weekly games without manual seeding.
-- Source: `constants/wedge.ts`
+**Now (what we build):** Multi-activity density in **Ottawa** at **free public places** until strangers meet weekly without founder babysitting. Then franchise to **Montreal & Toronto**.
+
+**Guardrail:** Do not dress Phase 1 like Phase 4. No travel sponsorships, athlete recruiting, venue CRM, or empty multi-city launch until Ottawa density exists.
+
+## Phases (order is law)
+1. Local show-up-and-play (loneliness → free place near you → meet)
+2. Density + habit (multi-sport hosts, crews, rematch)
+3. Business that pays
+4. Fly regular athletes / travel experiences
+5. Venues, events, maybe new courts
+6. Next cities (MTL / TO method clone) → worldwide
+
+## Product (Phase 1)
+Location-based pickup matcher (NOT dating). Any activity: volleyball, shinny, cricket, basketball, tai chi, outdoor yoga, etc.
+
+## Launch law (until Ottawa density)
+- **City:** Ottawa (prove-it). Glebe / Centretown is a strong pocket, not the only neighbourhood.
+- **Activities:** Every catalog sport/activity gets free places. No single-sport monopoly for “getting people.”
+- **Places:** Free-first (parks, fields, courts, beaches, paths, outdoor rinks, quiet lawns).
+- **Next cities:** Montreal & Toronto after unaided meetups — not empty shells now.
+- Source: `constants/wedge.ts`, `constants/sports.ts`, `constants/ottawaCourts.ts`
+- Seed ops: `docs/SEED_PLAYBOOK.md`
 
 Core modes:
-- **Sessions** — scheduled / recurring pickups; join → group chat
-- **Solos** — instant “let’s play” with people free now
-- **Map** — courts/venues (wedge courts first)
-- **Profiles + soft trust** — phone verify early; photo/ID later
+- **Sessions** — scheduled / recurring meetups; join → group chat
+- **Now** — Online / Looking / Games
+- **Map** — free places near you, filter by activity + season
+- **Profiles + soft trust** — face photo required to join; phone later
+- **Location** — near-you distances; coarsened Go Live presence
 
-## Safety / verification (scale with density)
-1. Meet at **public mapped courts** only; never private addresses
-2. **SafetyGate** before Message / Let’s play / Join
-3. **Phone** verify as the early trust gate; photo/ID optional until abuse appears
-4. **Verified-only** on Solos defaults **OFF** until Solos has supply
-5. In-chat safety reminder + Report on profiles
-6. Later: block, meetup check-in, share-trip-with-friend, no-show reputation
+## Safety / verification
+1. Meet at **public mapped places** only; never private addresses
+2. **Real face photo on profile** — required before Join / Looking (recognize them)
+3. **SafetyGate** before Message / Let’s play / Join
+4. Phone verify as early trust gate; ID later
+5. **Verified-only** on Looking defaults **OFF** until supply exists
+6. In-chat safety reminder + Report
+7. GPS for distances; Go Live shares coarsened coords (~150m)
 
-## Retention (after the whistle)
-- I’m here / check-in
-- Rate session / would play again
-- Rematch same crew
-- Recurring “same time next week”
-- Show-up / no-show soft reputation
-
-## Exhilaration levers
-- Live pulse (“X people ready near you”)
-- Go live on Solos
-- Ratings, games played, streaks that mean you *played*
-- Host tools: fill spots, who’s coming, reminders
+## Retention
+- I’m here / check-in, rematch intent, next week, show-up reputation
 
 ## Visual identity
-**Court Fresh** — light athletic surfaces + teal accent (trust + energy):
-- Cool gray bg `#F4F6F8` / white cards `#FFFFFF`
-- Ink `#0F172A` / muted `#64748B`
-- Teal `#0D9488` (primary), bright `#14B8A6`, soft `#CCFBF1`
-Teal CTAs use white text. Source: `constants/theme.ts`.
-Do not use black/gold luxury, muddy mustard, Halloween orange, or purple.
+**Evening court** — asphalt ink + court-line green. Fonts: Oswald + Source Sans 3. Source: `constants/theme.ts`.
+Talk like a person organizing a meetup. No emoji tab icons, no “backend live” chrome.
 
 ## Backend
-Supabase core loop only: auth, profiles, sessions (+ join), solos presence, chat, show-up.
+Supabase: auth, profiles, sessions, solos, chat, presence, show-up.
 Env: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
-Falls back to mock when unset. Schema: `supabase/migrations/`.

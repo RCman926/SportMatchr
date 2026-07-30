@@ -1,4 +1,4 @@
-/** Sports people play around Ottawa — grouped by season. */
+/** Sports & activities people do around Ottawa — grouped by season. */
 
 export const OTTAWA_SPORT_SEASONS = {
   Winter: [
@@ -42,6 +42,7 @@ export const OTTAWA_SPORT_SEASONS = {
     'Hiking',
     'Skateboarding',
     'Outdoor Yoga',
+    'Tai Chi',
   ],
   'Year-round': [
     'Basketball',
@@ -58,6 +59,8 @@ export const OTTAWA_SPORT_SEASONS = {
     'Boxing',
     'Martial Arts',
     'Yoga',
+    'Tai Chi',
+    'Qi Gong',
     'CrossFit',
     'Weight Training',
     'Ball Hockey',
@@ -78,34 +81,60 @@ export const OTTAWA_SPORTS: OttawaSport[] = Array.from(
 );
 
 export const OTTAWA_POPULAR_BY_SEASON = {
-  Winter: ['Shinny', 'Skating', 'Ice Hockey', 'Curling', 'Cross-Country Skiing'] as OttawaSport[],
+  Winter: ['Shinny', 'Skating', 'Ice Hockey', 'Pond Hockey', 'Cross-Country Skiing'] as OttawaSport[],
   Summer: [
-    'Pickleball',
+    'Beach Volleyball',
     'Soccer',
     'Tennis',
-    'Beach Volleyball',
     'Outdoor Basketball',
-    'Ultimate Frisbee',
+    'Outdoor Yoga',
+    'Tai Chi',
+    'Cricket',
+    'Baseball',
   ] as OttawaSport[],
-  'Year-round': ['Basketball', 'Running', 'Cycling', 'Climbing', 'Badminton'] as OttawaSport[],
+  'Year-round': [
+    'Basketball',
+    'Running',
+    'Badminton',
+    'Yoga',
+    'Tai Chi',
+    'Cycling',
+  ] as OttawaSport[],
 };
 
-/**
- * Wedge-first chips: Pickleball leads. Other sports remain available in SportPicker.
- * Do not reorder away from Pickleball until Glebe/Centretown has weekly density.
- */
+/** Multi-activity chips — not locked to one sport */
 export const OTTAWA_POPULAR_SPORTS: OttawaSport[] = [
-  'Pickleball',
-  'Basketball',
-  'Tennis',
-  'Soccer',
-  'Outdoor Basketball',
-  'Running',
   'Beach Volleyball',
+  'Basketball',
+  'Soccer',
+  'Shinny',
+  'Tennis',
+  'Outdoor Yoga',
+  'Tai Chi',
+  'Cricket',
+  'Badminton',
+  'Running',
+  'Baseball',
+  'Pickleball',
   'Ultimate Frisbee',
 ];
 
 export const SPORTS_LIST = OTTAWA_SPORTS;
 
-/** Default filter on Home / Solos for launch wedge */
-export const WEDGE_DEFAULT_SPORT: OttawaSport = 'Pickleball';
+/** Default: no forced single sport — UI uses seasonal popular */
+export const WEDGE_DEFAULT_SPORT: OttawaSport | null = null;
+
+export type SportSeason = keyof typeof OTTAWA_SPORT_SEASONS;
+
+/** Rough season for Ottawa (Northern Hemisphere). */
+export function currentOttawaSeason(date = new Date()): SportSeason {
+  const m = date.getMonth(); // 0–11
+  if (m === 11 || m <= 2) return 'Winter';
+  if (m >= 5 && m <= 8) return 'Summer';
+  return 'Year-round';
+}
+
+export function getSeasonalPopularSports(date = new Date()): OttawaSport[] {
+  const season = currentOttawaSeason(date);
+  return OTTAWA_POPULAR_BY_SEASON[season];
+}

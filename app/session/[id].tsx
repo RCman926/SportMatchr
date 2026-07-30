@@ -11,15 +11,19 @@ import {
   Alert,
 } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
-import { MOCK_SESSIONS, ChatMessage } from '../../constants/mockData';
+import { ChatMessage } from '../../constants/mockData';
 import {
   cloneNextWeek,
+  getSessionById,
   joinSession,
   listMessages,
   markHere,
   sendMessage,
   submitFeedback,
+  subscribeMessages,
+  LiveSession,
 } from '../../lib/api';
+import { useAuthStore } from '../../lib/authStore';
 
 function goBackToApp() {
   if (router.canGoBack()) {
@@ -41,12 +45,18 @@ export default function SessionDetailScreen() {
     recurring?: string;
   }>();
 
+  const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const [liveSession, setLiveSession] = useState<LiveSession | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState('');
+  const [here, setHere] = useState(false);
+  const [rated, setRated] = useState(false);
+
   const session = useMemo(() => {
-    const found = MOCK_SESSIONS.find((s) => s.id === params.id);
-    if (found) {
+    if (liveSession) {
       return {
-        ...found,
-        recurring: params.recurring || found.recurring,
+        ...liveSession,
+        recurring: params.recurring || liveSession.recurring,
       };
     }
     return {
@@ -61,45 +71,59 @@ export default function SessionDetailScreen() {
       hostId: 'me',
       recurring: params.recurring || undefined,
     };
-  }, [params]);
-
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [draft, setDraft] = useState('');
-  const [here, setHere] = useState(false);
-  const [rated, setRated] = useState(false);
+  }, [liveSession, params]);
 
   useEffect(() => {
     let alive = true;
+    let unsub: (() => void) | undefined;
+
     (async () => {
-      await joinSession(session.id);
-      const msgs = await listMessages(session.id);
+      if (isSignedIn && params.id && !params.id.startsWith('solo-') && !params.id.startsWith('mock-')) {
+        await joinSession(params.id);
+        const s = await getSessionById(params.id);
+        if (alive && s) setLiveSession(s);
+      }
+
+      const msgs = await listMessages(params.id ?? 'solo', { live: isSignedIn });
       if (alive) setMessages(msgs);
+
+      if (isSignedIn && params.id) {
+        unsub = subscribeMessages(params.id, (msg) => {
+          setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+        });
+      }
     })();
+
     return () => {
       alive = false;
+      unsub?.();
     };
-  }, [session.id]);
+  }, [params.id, isSignedIn]);
 
   const send = async () => {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
-    const msg = await sendMessage(session.id, text);
-    if (msg) setMessages((prev) => [...prev, msg]);
+    const msg = await sendMessage(params.id ?? 'solo', text);
+    if (msg) setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
   };
 
   const onHere = async () => {
+    if (!isSignedIn) {
+      router.push('/auth');
+      return;
+    }
     await markHere(session.id);
     setHere(true);
-    Alert.alert('You’re here', 'Others in this session can see you checked in at the public court.');
+    Alert.alert('You’re here', 'Checked in at the public court.');
   };
 
   const onWouldPlayAgain = async (yes: boolean) => {
     await submitFeedback({
       sessionId: session.id,
       wouldPlayAgain: yes,
-      rating: yes ? 5 : 3,
       wantRematch: yes,
+      showedUp: true,
     });
     setRated(true);
   };
@@ -110,18 +134,26 @@ export default function SessionDetailScreen() {
       wantRematch: true,
       wouldPlayAgain: true,
     });
-    Alert.alert('Rematch flagged', 'Same crew — open Create or wait for the host to spin a rematch.');
+    Alert.alert('Rematch flagged', 'Same crew — ask the host or create a follow-up.');
   };
 
   const onNextWeek = async () => {
+    if (!isSignedIn) {
+      router.push('/auth');
+      return;
+    }
     await submitFeedback({
       sessionId: session.id,
       wantNextWeek: true,
       wouldPlayAgain: true,
     });
     const next = await cloneNextWeek(session);
-    Alert.alert('Next week booked', 'Same time, same court. Chat opened for the follow-up session.');
-    router.push({
+    if (next.error || !next.id) {
+      Alert.alert('Could not book next week', next.error ?? 'Try again');
+      return;
+    }
+    Alert.alert('Next week booked', 'Same vibe, new session chat.');
+    router.replace({
       pathname: '/session/[id]',
       params: {
         id: next.id,
@@ -156,7 +188,7 @@ export default function SessionDetailScreen() {
       >
         <View style={styles.container}>
           <TouchableOpacity style={styles.exitBar} onPress={goBackToApp} activeOpacity={0.85}>
-            <Text style={styles.exitText}>← Back to Home (tabs return here)</Text>
+            <Text style={styles.exitText}>← Back to Home</Text>
           </TouchableOpacity>
 
           <View style={styles.info}>
@@ -165,17 +197,14 @@ export default function SessionDetailScreen() {
               {session.time} · {session.location}
             </Text>
             <Text style={styles.meta}>
-              {session.players}/{session.max} players · Group chat
+              {session.players}/{session.max} players ·{' '}
+              {isSignedIn ? 'Live group chat' : 'Demo chat (sign in for live)'}
             </Text>
-            {session.recurring ? (
-              <Text style={styles.recurring}>↻ {session.recurring}</Text>
-            ) : null}
-            {session.description ? (
-              <Text style={styles.desc}>{session.description}</Text>
-            ) : null}
+            {session.recurring ? <Text style={styles.recurring}>↻ {session.recurring}</Text> : null}
+            {session.description ? <Text style={styles.desc}>{session.description}</Text> : null}
             <View style={styles.safety}>
               <Text style={styles.safetyText}>
-                Safety: meet at the public court only. Don’t share your address. Report anyone who feels off.
+                Safety: meet at the public court only. Don’t share your address.
               </Text>
             </View>
 
@@ -198,17 +227,31 @@ export default function SessionDetailScreen() {
             </View>
 
             {!rated ? (
-              <View style={styles.rateRow}>
-                <Text style={styles.rateLabel}>Would play again?</Text>
-                <TouchableOpacity style={styles.yesBtn} onPress={() => onWouldPlayAgain(true)}>
-                  <Text style={styles.yesText}>Yes</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.noBtn} onPress={() => onWouldPlayAgain(false)}>
-                  <Text style={styles.noText}>No</Text>
-                </TouchableOpacity>
+              <View style={styles.rateBlock}>
+                <Text style={styles.rateLabel}>
+                  Trust check — not about skill. Would you play with these people again?
+                </Text>
+                <View style={styles.rateRow}>
+                  <TouchableOpacity
+                    style={styles.yesBtn}
+                    onPress={() => onWouldPlayAgain(true)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.yesText}>Yes</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.noBtn}
+                    onPress={() => onWouldPlayAgain(false)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.noText}>Not really</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
-              <Text style={styles.rated}>Thanks — that helps the crew stay solid.</Text>
+              <Text style={styles.rated}>
+                Thanks — that only updates show-up / rematch trust, not how well they play.
+              </Text>
             )}
           </View>
 
@@ -225,9 +268,7 @@ export default function SessionDetailScreen() {
                 style={[styles.bubble, m.mine ? styles.bubbleMine : styles.bubbleOther]}
               >
                 {!m.mine && <Text style={styles.sender}>{m.sender}</Text>}
-                <Text style={[styles.bubbleText, m.mine && styles.bubbleTextMine]}>
-                  {m.text}
-                </Text>
+                <Text style={[styles.bubbleText, m.mine && styles.bubbleTextMine]}>{m.text}</Text>
                 <Text style={[styles.at, m.mine && styles.atMine]}>{m.at}</Text>
               </View>
             ))}
@@ -236,7 +277,7 @@ export default function SessionDetailScreen() {
           <View style={styles.composer}>
             <TextInput
               style={styles.input}
-              placeholder="Message the group…"
+              placeholder={isSignedIn ? 'Message the group…' : 'Demo chat — messages stay on this device'}
               placeholderTextColor="#94A3B8"
               value={draft}
               onChangeText={setDraft}
@@ -255,65 +296,27 @@ export default function SessionDetailScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: {
-    flex: 1,
-    backgroundColor: '#F4F6F8',
-  },
-  exitBar: {
-    backgroundColor: '#F4F6F8',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  exitText: {
-    color: '#0F172A',
-    fontWeight: '800',
-    fontSize: 14,
-  },
+  container: { flex: 1, backgroundColor: '#F4F6F8' },
+  exitBar: { backgroundColor: '#F4F6F8', paddingVertical: 12, paddingHorizontal: 16 },
+  exitText: { color: '#0F172A', fontWeight: '800', fontSize: 14 },
   info: {
     backgroundColor: '#FFFFFF',
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  meta: {
-    marginTop: 4,
-    color: '#64748B',
-    fontSize: 13,
-  },
-  recurring: {
-    marginTop: 6,
-    color: '#14B8A6',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  desc: {
-    marginTop: 8,
-    color: '#334155',
-    fontSize: 14,
-    lineHeight: 20,
-  },
+  title: { fontSize: 20, fontWeight: '800', color: '#0F172A' },
+  meta: { marginTop: 4, color: '#64748B', fontSize: 13 },
+  recurring: { marginTop: 6, color: '#14B8A6', fontWeight: '700', fontSize: 12 },
+  desc: { marginTop: 8, color: '#334155', fontSize: 14, lineHeight: 20 },
   safety: {
     marginTop: 12,
     backgroundColor: '#CCFBF1',
     borderRadius: 10,
     padding: 10,
   },
-  safetyText: {
-    color: '#0D9488',
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '600',
-  },
-  retentionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
+  safetyText: { color: '#0F766E', fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  retentionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   retBtn: {
     flex: 1,
     borderWidth: 1,
@@ -323,34 +326,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#CCFBF1',
   },
-  retBtnOn: {
-    backgroundColor: '#0D9488',
-  },
-  retText: {
-    color: '#0D9488',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  retTextOn: {
-    color: '#FFFFFF',
-  },
-  rateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-  },
-  rateLabel: { color: '#334155', fontWeight: '600', fontSize: 13, flex: 1 },
+  retBtnOn: { backgroundColor: '#0D9488' },
+  retText: { color: '#0D9488', fontWeight: '800', fontSize: 12 },
+  retTextOn: { color: '#FFFFFF' },
+  rateBlock: { marginTop: 12 },
+  rateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  rateLabel: { color: '#334155', fontWeight: '600', fontSize: 13, lineHeight: 18 },
   yesBtn: {
     backgroundColor: '#0D9488',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
   },
-  yesText: { color: '#000', fontWeight: '800' },
+  yesText: { color: '#fff', fontWeight: '800' },
   noBtn: {
     borderWidth: 1,
-    borderColor: '#404040',
+    borderColor: '#CBD5E1',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
@@ -364,50 +355,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
-  chat: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  chatContent: {
-    paddingVertical: 8,
-    gap: 8,
-  },
+  chat: { flex: 1, paddingHorizontal: 16 },
+  chatContent: { paddingVertical: 8, gap: 8 },
   bubble: {
     maxWidth: '82%',
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  bubbleOther: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
-  },
-  bubbleMine: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#0D9488',
-  },
-  sender: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0D9488',
-    marginBottom: 2,
-  },
-  bubbleText: {
-    fontSize: 15,
-    color: '#0F172A',
-  },
-  bubbleTextMine: {
-    color: '#FFFFFF',
-  },
-  at: {
-    marginTop: 4,
-    fontSize: 10,
-    color: '#64748B',
-  },
-  atMine: {
-    color: '#CCFBF1',
-    textAlign: 'right',
-  },
+  bubbleOther: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF' },
+  bubbleMine: { alignSelf: 'flex-end', backgroundColor: '#0D9488' },
+  sender: { fontSize: 11, fontWeight: '700', color: '#0D9488', marginBottom: 2 },
+  bubbleText: { fontSize: 15, color: '#0F172A' },
+  bubbleTextMine: { color: '#FFFFFF' },
+  at: { marginTop: 4, fontSize: 10, color: '#64748B' },
+  atMine: { color: '#CCFBF1', textAlign: 'right' },
   composer: {
     flexDirection: 'row',
     gap: 8,
@@ -418,7 +380,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F4F6F8',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -431,8 +393,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     justifyContent: 'center',
   },
-  sendText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
+  sendText: { color: '#FFFFFF', fontWeight: '700' },
 });

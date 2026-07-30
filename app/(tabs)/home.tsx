@@ -1,100 +1,223 @@
-import { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
-import { MOCK_SESSIONS, PROFILES, SOLO_PLAYERS } from '../../constants/mockData';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { PROFILES } from '../../constants/mockData';
 import { WEDGE } from '../../constants/wedge';
 import { VerifiedBadge } from '../../components/VerifiedBadge';
 import { SafetyGate } from '../../components/SafetyGate';
 import { SportFilterBar } from '../../components/SportPicker';
+import { useLocationStore } from '../../lib/locationStore';
+import { useAuthStore } from '../../lib/authStore';
+import { formatDistanceKm, haversineKm, courtCoords } from '../../lib/location';
+import { joinSession, listSessions, LiveSession, fetchMyProfile } from '../../lib/api';
+import { freePlacesNearYou } from '../../lib/places';
+import { ensureFacePhotoForMeetup } from '../../lib/profilePhoto';
+import { theme } from '../../constants/theme';
+import { LookingPulse } from '../../components/LookingPulse';
 
 export default function HomeScreen() {
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [sportFilter, setSportFilter] = useState<string | null>(WEDGE.primarySport);
-  const liveCount = SOLO_PLAYERS.filter((p) => p.available.includes('now')).length;
-  const sessions = sportFilter
-    ? MOCK_SESSIONS.filter((s) => s.sport === sportFilter)
-    : MOCK_SESSIONS;
+  const [sportFilter, setSportFilter] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<LiveSession[]>([]);
+  const [source, setSource] = useState<'live' | 'demo'>('demo');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  const coords = useLocationStore((s) => s.coords);
+  const area = useLocationStore((s) => s.area);
+  const locSource = useLocationStore((s) => s.source);
+  const refreshLoc = useLocationStore((s) => s.refresh);
+  const isSignedIn = useAuthStore((s) => s.isSignedIn);
+
+  const nearbyFree = useMemo(
+    () => freePlacesNearYou(coords, { sport: sportFilter, limit: 6, seasonAware: true }),
+    [coords, sportFilter]
+  );
+
+  const load = useCallback(async () => {
+    const res = await listSessions(sportFilter, { live: isSignedIn });
+    setSessions(res.sessions);
+    setSource(res.source);
+    if (isSignedIn) {
+      const me = await fetchMyProfile();
+      setAvatarUrl(me?.avatarUrl ?? null);
+    }
+    setLoading(false);
+  }, [sportFilter, isSignedIn]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      void load();
+    }, [load])
+  );
+
+  const ranked = sessions
+    .map((s) => {
+      const c = courtCoords(s.courtId) ?? {
+        lat: s.lat ?? coords.lat,
+        lng: s.lng ?? coords.lng,
+      };
+      return { ...s, distanceKm: haversineKm(coords, c) };
+    })
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+
+  const onJoin = async (id: string) => {
+    if (isSignedIn) {
+      const ok = await ensureFacePhotoForMeetup({ remoteAvatarUrl: avatarUrl });
+      if (!ok) return;
+      await joinSession(id);
+    }
+    router.push({ pathname: '/session/[id]', params: { id } });
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.header}>SportMatchr</Text>
       <Text style={styles.sub}>{WEDGE.copy.homeSub}</Text>
 
-      <View style={styles.pulse}>
-        <Text style={styles.pulseEyebrow}>LIVE · {WEDGE.pocketName.toUpperCase()}</Text>
-        <Text style={styles.pulseTitle}>{liveCount} solos ready to play</Text>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/solos')} activeOpacity={0.85}>
-          <Text style={styles.pulseCta}>Jump into Solos →</Text>
+      <LookingPulse />
+
+      {source === 'demo' ? (
+        <TouchableOpacity
+          style={styles.softNote}
+          onPress={() => router.push('/auth')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.softNoteText}>
+            Sample games for a peek — sign in to see who’s actually out.
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
+      <View style={styles.locBar}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.locLabel}>
+            {locSource === 'gps' ? 'Near you' : 'Around'}
+          </Text>
+          <Text style={styles.locValue}>{area}</Text>
+        </View>
+        <TouchableOpacity style={styles.locBtn} onPress={() => void refreshLoc()} activeOpacity={0.85}>
+          <Text style={styles.locBtnText}>Refresh</Text>
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity
         style={styles.createBtn}
         activeOpacity={0.85}
-        onPress={() => router.push('/create')}
+        onPress={() => (isSignedIn ? router.push('/create') : router.push('/auth'))}
       >
-        <Text style={styles.createBtnText}>+ Create Pickup Session</Text>
+        <Text style={styles.createBtnText}>Host a meetup</Text>
       </TouchableOpacity>
 
       <SportFilterBar selected={sportFilter} onChange={setSportFilter} />
 
       <Text style={styles.section}>
-        Nearby Sessions{sportFilter ? ` · ${sportFilter}` : ''}
+        Free places near you{sportFilter ? ` · ${sportFilter}` : ''}
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.placeRow}
+      >
+        {nearbyFree.map((p) => (
+          <TouchableOpacity
+            key={p.id}
+            style={styles.placeCard}
+            activeOpacity={0.85}
+            onPress={() => router.push('/(tabs)/map')}
+          >
+            <Text style={styles.placeFree}>Free</Text>
+            <Text style={styles.placeName} numberOfLines={2}>
+              {p.name}
+            </Text>
+            <Text style={styles.placeMeta}>
+              {formatDistanceKm(p.distanceKm)} · {p.neighbourhood}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <Text style={styles.section}>
+        Open meetups{sportFilter ? ` · ${sportFilter}` : ''}
       </Text>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        {sessions.length === 0 && (
-          <Text style={{ color: '#64748B', marginBottom: 12, lineHeight: 20 }}>
-            No {sportFilter} sessions yet. Create one and be the host.
-          </Text>
-        )}
-        {sessions.map((s) => {
-          const host = PROFILES[s.hostId];
-          return (
-            <View key={s.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.sport}>{s.sport}</Text>
-                <Text style={styles.players}>
-                  {s.players}/{s.max} players
+      {loading ? (
+        <ActivityIndicator color={theme.accent} style={{ marginTop: 24 }} />
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await load();
+                setRefreshing(false);
+              }}
+            />
+          }
+        >
+          {ranked.length === 0 && (
+            <Text style={styles.empty}>
+              Quiet right now
+              {sportFilter ? ` for ${sportFilter}` : ''}.{' '}
+              {isSignedIn
+                ? 'Host something — even two people is a start.'
+                : 'Sign in if you want the real board, or host the first one.'}
+            </Text>
+          )}
+          {ranked.map((s) => {
+            const host = PROFILES[s.hostId];
+            const hostName = s.hostName ?? host?.name ?? 'Host';
+            return (
+              <View key={s.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.sport}>{s.sport}</Text>
+                  <Text style={styles.players}>
+                    {formatDistanceKm(s.distanceKm)} · {s.players}/{s.max}
+                  </Text>
+                </View>
+                <Text style={styles.title}>{s.title}</Text>
+                <Text style={styles.meta}>
+                  {s.time} • {s.location}
                 </Text>
-              </View>
-              <Text style={styles.title}>{s.title}</Text>
-              <Text style={styles.meta}>
-                {s.time} • {s.location}
-              </Text>
-              {s.recurring ? (
-                <Text style={styles.recurring}>↻ {s.recurring}</Text>
-              ) : null}
-              {host && (
+                {s.recurring ? <Text style={styles.recurring}>↻ {s.recurring}</Text> : null}
+                <View style={styles.hostRow}>
+                  <Text style={styles.hostText}>Hosted by {hostName}</Text>
+                  {host ? <VerifiedBadge level={host.verification} compact /> : null}
+                </View>
                 <TouchableOpacity
-                  style={styles.hostRow}
-                  onPress={() => router.push(`/profile/${host.id}`)}
+                  style={styles.joinBtn}
                   activeOpacity={0.85}
+                  onPress={() => setPendingId(s.id)}
                 >
-                  <Text style={styles.hostText}>Hosted by {host.name}</Text>
-                  <VerifiedBadge level={host.verification} compact />
+                  <Text style={styles.joinText}>I’m in</Text>
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.joinBtn}
-                activeOpacity={0.85}
-                onPress={() => setPendingId(s.id)}
-              >
-                <Text style={styles.joinText}>Join + chat</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
-      </ScrollView>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
 
       <SafetyGate
         visible={!!pendingId}
-        title="Joining a public meetup"
+        title="Heading to this game?"
         onCancel={() => setPendingId(null)}
         onConfirm={() => {
           const id = pendingId;
           setPendingId(null);
-          if (id) router.push({ pathname: '/session/[id]', params: { id } });
+          if (id) void onJoin(id);
         }}
       />
     </View>
@@ -102,128 +225,174 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F4F6F8',
-    padding: 16,
-  },
+  container: { flex: 1, backgroundColor: theme.bg, padding: 16 },
   header: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontFamily: theme.fonts.displayBold,
+    fontSize: 34,
+    color: theme.ink,
+    letterSpacing: 0.5,
   },
   sub: {
-    fontSize: 15,
-    color: '#64748B',
-    marginBottom: 12,
-  },
-  pulse: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
-  },
-  pulseEyebrow: {
-    color: '#0D9488',
-    fontWeight: '800',
-    fontSize: 11,
-    letterSpacing: 1,
-  },
-  pulseTitle: {
-    color: '#0F172A',
-    fontWeight: '800',
-    fontSize: 20,
+    fontFamily: theme.fonts.body,
+    fontSize: 16,
+    color: theme.muted,
+    marginBottom: 14,
     marginTop: 4,
+    lineHeight: 22,
   },
-  pulseCta: {
-    color: '#0D9488',
-    fontWeight: '700',
-    marginTop: 8,
+  softNote: {
+    marginBottom: 12,
+    paddingVertical: 8,
+  },
+  softNoteText: {
+    fontFamily: theme.fonts.body,
+    color: theme.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    textDecorationLine: 'underline',
+    textDecorationColor: theme.border,
+  },
+  locBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+    paddingBottom: 12,
+    marginBottom: 14,
+  },
+  locLabel: {
+    fontFamily: theme.fonts.bodyMed,
+    color: theme.accent,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  locValue: {
+    fontFamily: theme.fonts.bodyBold,
+    color: theme.ink,
+    fontSize: 15,
+    marginTop: 2,
+  },
+  locBtn: {
+    backgroundColor: theme.accentSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  locBtnText: {
+    color: theme.accentDark,
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 12,
   },
   createBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: theme.accent,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   createBtnText: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontFamily: theme.fonts.bodyBold,
     fontSize: 16,
   },
   section: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontFamily: theme.fonts.display,
+    fontSize: 22,
     marginBottom: 12,
-    color: '#0F172A',
+    marginTop: 4,
+    color: theme.ink,
+    letterSpacing: 0.3,
+  },
+  placeRow: { gap: 10, paddingBottom: 8, marginBottom: 8 },
+  placeCard: {
+    width: 160,
+    backgroundColor: theme.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    padding: 12,
+  },
+  placeFree: {
+    fontFamily: theme.fonts.bodyBold,
+    color: theme.accent,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  placeName: {
+    fontFamily: theme.fonts.bodyBold,
+    color: theme.ink,
+    fontSize: 14,
+    marginTop: 4,
+    minHeight: 36,
+  },
+  placeMeta: {
+    fontFamily: theme.fonts.body,
+    color: theme.muted,
+    fontSize: 11,
+    marginTop: 4,
+  },
+  empty: {
+    fontFamily: theme.fonts.body,
+    color: theme.muted,
+    marginBottom: 12,
+    lineHeight: 22,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: theme.surface,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    borderColor: theme.border,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   sport: {
-    fontWeight: '700',
-    color: '#0D9488',
-    fontSize: 14,
+    fontFamily: theme.fonts.bodyBold,
+    color: theme.accent,
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   players: {
-    color: '#64748B',
+    color: theme.muted,
     fontSize: 13,
+    fontFamily: theme.fonts.bodyMed,
   },
   title: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontSize: 18,
+    fontFamily: theme.fonts.bodyBold,
+    color: theme.ink,
     marginBottom: 4,
   },
   meta: {
-    color: '#64748B',
-    fontSize: 13,
+    color: theme.muted,
+    fontSize: 14,
+    fontFamily: theme.fonts.body,
     marginBottom: 6,
   },
   recurring: {
-    color: '#14B8A6',
+    color: theme.accentBright,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: theme.fonts.bodyMed,
     marginBottom: 10,
   },
-  hostRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
+  hostRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   hostText: {
-    color: '#334155',
+    color: theme.ink,
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: theme.fonts.bodyMed,
   },
   joinBtn: {
-    backgroundColor: '#CCFBF1',
-    paddingVertical: 8,
+    backgroundColor: theme.accentSoft,
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#0D9488',
   },
   joinText: {
-    color: '#0D9488',
-    fontWeight: '700',
+    color: theme.accentDark,
+    fontFamily: theme.fonts.bodyBold,
   },
 });

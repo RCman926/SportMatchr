@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -11,36 +11,56 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SportPicker } from '../components/SportPicker';
-import { OTTAWA_COURTS } from '../constants/ottawaCourts';
 import { WEDGE } from '../constants/wedge';
+import { getSeasonalPopularSports } from '../constants/sports';
 import { createSession } from '../lib/api';
+import { useAuthStore } from '../lib/authStore';
+import { useLocationStore } from '../lib/locationStore';
+import { haversineKm } from '../lib/location';
+import { listFreePlaces } from '../lib/places';
 
 export default function CreateSessionScreen() {
-  const [sport, setSport] = useState<string | null>(WEDGE.primarySport);
+  const [sport, setSport] = useState<string | null>(getSeasonalPopularSports()[0] ?? 'Basketball');
   const [title, setTitle] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('8');
   const [recurring, setRecurring] = useState(true);
   const [recurringLabel, setRecurringLabel] = useState('Every Tue 7:00 PM');
   const [saving, setSaving] = useState(false);
+  const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const coords = useLocationStore((s) => s.coords);
 
   const matchingCourts = useMemo(() => {
-    const bySport = sport
-      ? OTTAWA_COURTS.filter((c) => c.sports.includes(sport))
-      : OTTAWA_COURTS;
-    const priority = WEDGE.priorityCourtIds
-      .map((id) => OTTAWA_COURTS.find((c) => c.id === id))
-      .filter(Boolean) as typeof OTTAWA_COURTS;
-    const rest = bySport.filter(
-      (c) => !(WEDGE.priorityCourtIds as readonly string[]).includes(c.id)
-    );
-    const merged = [...priority.filter((c) => !sport || c.sports.includes(sport)), ...rest];
-    return merged.length ? merged : OTTAWA_COURTS;
-  }, [sport]);
+    const freeFirst = listFreePlaces({ sport, seasonAware: true });
+    const fallback = listFreePlaces({ sport });
+    const pool = freeFirst.length ? freeFirst : fallback.length ? fallback : listFreePlaces();
+    return [...pool].sort((a, b) => {
+      const ap = (WEDGE.priorityCourtIds as readonly string[]).includes(a.id) ? 0 : 1;
+      const bp = (WEDGE.priorityCourtIds as readonly string[]).includes(b.id) ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return (
+        haversineKm(coords, { lat: a.lat, lng: a.lng }) -
+        haversineKm(coords, { lat: b.lat, lng: b.lng })
+      );
+    });
+  }, [sport, coords]);
 
   const [location, setLocation] = useState(matchingCourts[0]?.name ?? '');
   const [courtId, setCourtId] = useState(matchingCourts[0]?.id);
 
+  useEffect(() => {
+    const next = matchingCourts[0];
+    if (!next) return;
+    if (!matchingCourts.some((c) => c.id === courtId)) {
+      setLocation(next.name);
+      setCourtId(next.id);
+    }
+  }, [matchingCourts, courtId]);
+
   const create = async () => {
+    if (!isSignedIn) {
+      router.push('/auth');
+      return;
+    }
     if (!sport) {
       Alert.alert('Pick a sport', 'Choose what you want to play.');
       return;
@@ -55,11 +75,15 @@ export default function CreateSessionScreen() {
       maxPlayers: Number(maxPlayers) || 8,
       recurring: recurring ? recurringLabel.trim() || 'Weekly' : undefined,
       description: recurring
-        ? `Recurring host session in ${WEDGE.pocketName}. Public court only.`
-        : `Pickup in ${WEDGE.pocketName}. Public court only.`,
+        ? `Recurring host session in ${WEDGE.pocketName}. Free public place only.`
+        : `Pickup in ${WEDGE.pocketName}. Free public place only.`,
     });
     setSaving(false);
-    router.push({
+    if (result.error || !result.id) {
+      Alert.alert('Could not create', result.error ?? 'Sign in and try again.');
+      return;
+    }
+    router.replace({
       pathname: '/session/[id]',
       params: {
         id: result.id,
@@ -85,23 +109,23 @@ export default function CreateSessionScreen() {
         <Text style={styles.exitText}>← Back to Home</Text>
       </TouchableOpacity>
 
-      <Text style={styles.header}>Create pickup</Text>
+      <Text style={styles.header}>Host a meetup</Text>
       <Text style={styles.sub}>
-        Host tools win density. Default: {WEDGE.primarySport} at {WEDGE.pocketName} courts.
+        Free public places near you — any activity. Pick a sport, then a free spot.
       </Text>
 
-      <SportPicker mode="single" label="Sport" selected={sport} onChange={setSport} />
+      <SportPicker mode="single" label="Activity" selected={sport} onChange={setSport} />
 
       <Text style={styles.label}>Title</Text>
       <TextInput
         style={styles.input}
-        placeholder={`${sport ?? 'Sport'} open play`}
+        placeholder={`${sport ?? 'Activity'} open play`}
         placeholderTextColor="#94A3B8"
         value={title}
         onChangeText={setTitle}
       />
 
-      <Text style={styles.label}>Court / venue (wedge first)</Text>
+      <Text style={styles.label}>Free place (near you first)</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

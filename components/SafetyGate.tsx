@@ -1,5 +1,5 @@
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { SAFETY_TIPS } from '../constants/mockData';
+import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { theme } from '../constants/theme';
 
 type Props = {
   visible: boolean;
@@ -10,7 +10,7 @@ type Props = {
 
 export function SafetyGate({
   visible,
-  title = 'Stay safe when you meet',
+  title = 'Quick check before you go',
   onCancel,
   onConfirm,
 }: Props) {
@@ -18,26 +18,17 @@ export function SafetyGate({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <View style={styles.sheet}>
-          <Text style={styles.kicker}>SAFETY FIRST</Text>
           <Text style={styles.title}>{title}</Text>
-          <Text style={styles.sub}>
-            Meeting strangers for sport is fun — and it should stay safe. Quick rules:
-          </Text>
-
-          <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
-            {SAFETY_TIPS.map((tip) => (
-              <View key={tip} style={styles.tipRow}>
-                <Text style={styles.bullet}>•</Text>
-                <Text style={styles.tip}>{tip}</Text>
-              </View>
-            ))}
-          </ScrollView>
+          <Text style={styles.tip}>Public court only — never a private address.</Text>
+          <Text style={styles.tip}>Look for a real face photo so you recognize them.</Text>
+          <Text style={styles.tip}>Tell a friend where you’re headed.</Text>
+          <Text style={styles.tip}>If it feels off, leave. You can report later.</Text>
 
           <TouchableOpacity style={styles.confirm} onPress={onConfirm} activeOpacity={0.85}>
-            <Text style={styles.confirmText}>I understand — continue</Text>
+            <Text style={styles.confirmText}>Got it — let’s go</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancel} onPress={onCancel} activeOpacity={0.85}>
-            <Text style={styles.cancelText}>Not now</Text>
+            <Text style={styles.cancelText}>Maybe later</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -48,60 +39,42 @@ export function SafetyGate({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(26, 33, 28, 0.55)',
     justifyContent: 'center',
     padding: 20,
   },
   sheet: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: theme.surface,
+    borderRadius: 16,
     padding: 20,
-  },
-  kicker: {
-    color: '#0D9488',
-    fontWeight: '800',
-    fontSize: 12,
-    letterSpacing: 1,
-    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 8,
-  },
-  sub: {
-    color: '#64748B',
-    fontSize: 14,
-    lineHeight: 20,
+    fontFamily: theme.fonts.display,
+    fontSize: 26,
+    color: theme.ink,
     marginBottom: 14,
-  },
-  tipRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  bullet: {
-    color: '#0D9488',
-    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   tip: {
-    flex: 1,
-    color: '#334155',
-    fontSize: 14,
-    lineHeight: 20,
+    fontFamily: theme.fonts.body,
+    color: theme.muted,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 8,
   },
   confirm: {
     marginTop: 16,
-    backgroundColor: '#0D9488',
-    borderRadius: 12,
+    backgroundColor: theme.accent,
+    borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
   },
   confirmText: {
     color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 15,
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 16,
   },
   cancel: {
     marginTop: 10,
@@ -109,7 +82,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelText: {
-    color: '#64748B',
-    fontWeight: '600',
+    color: theme.muted,
+    fontFamily: theme.fonts.bodyMed,
   },
 });

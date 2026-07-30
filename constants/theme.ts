@@ -1,39 +1,46 @@
 /**
- * SportMatchr — Court Fresh palette.
- * Light, athletic, trustworthy. Teal energy on cool gray — not black/gold luxury.
+ * SportMatchr — “evening court” palette.
+ * Asphalt ink + lime court line. Avoids generic teal-SaaS / purple AI looks.
  */
 export const theme = {
-  bg: '#F4F6F8',
+  bg: '#F2F4F1',
   surface: '#FFFFFF',
-  ink: '#0F172A',
-  muted: '#64748B',
-  border: '#E2E8F0',
+  ink: '#1A211C',
+  muted: '#5C6B62',
+  border: '#D5DDD6',
 
-  /** Primary teal */
-  accent: '#0D9488',
-  /** Bright teal highlight */
-  accentBright: '#14B8A6',
-  accentDark: '#0F766E',
-  accentSoft: '#CCFBF1',
+  /** Court-line green */
+  accent: '#2F6B3A',
+  accentBright: '#3F8F4A',
+  accentDark: '#1F4D28',
+  accentSoft: '#E4F0E6',
 
-  panel: '#F4F6F8',
-  panelMuted: '#14B8A6',
+  panel: '#F2F4F1',
+  panelMuted: '#3F8F4A',
   panelBright: '#FFFFFF',
 
-  wine: '#0D9488',
-  wineSoft: '#CCFBF1',
+  wine: '#2F6B3A',
+  wineSoft: '#E4F0E6',
 
-  freeBg: '#CCFBF1',
-  freeFg: '#0F766E',
-  paidBg: '#E0F2FE',
-  paidFg: '#0369A1',
+  freeBg: '#E4F0E6',
+  freeFg: '#1F4D28',
+  paidBg: '#E8EEF5',
+  paidFg: '#2C4A6E',
 
-  danger: '#EF4444',
-  warnBg: '#FEF3C7',
-  warnFg: '#B45309',
+  danger: '#C23B3B',
+  warnBg: '#F7EFD8',
+  warnFg: '#7A5A1E',
 
-  success: '#16A34A',
-  successSoft: '#DCFCE7',
+  success: '#2F6B3A',
+  successSoft: '#E4F0E6',
+
+  fonts: {
+    display: 'Oswald_600SemiBold',
+    displayBold: 'Oswald_700Bold',
+    body: 'SourceSans3_400Regular',
+    bodyMed: 'SourceSans3_600SemiBold',
+    bodyBold: 'SourceSans3_700Bold',
+  },
 } as const;
 
 export type Theme = typeof theme;
