@@ -1,21 +1,28 @@
 /**
- * SportMatchr — “evening court” palette.
- * Asphalt ink + lime court line. Avoids generic teal-SaaS / purple AI looks.
+ * SportMatchr — evening court + ball orange.
+ * Asphalt ink, court-line green, basketball orange for energy.
+ * Avoids generic teal-SaaS / purple AI looks.
  */
 export const theme = {
-  bg: '#F2F4F1',
+  bg: '#F3F1EC',
   surface: '#FFFFFF',
   ink: '#1A211C',
   muted: '#5C6B62',
-  border: '#D5DDD6',
+  border: '#D8D4CC',
 
-  /** Court-line green */
+  /** Court-line green — structure, trust, places */
   accent: '#2F6B3A',
   accentBright: '#3F8F4A',
   accentDark: '#1F4D28',
   accentSoft: '#E4F0E6',
 
-  panel: '#F2F4F1',
+  /** Basketball orange — CTAs, “live”, energy */
+  ball: '#E87722',
+  ballBright: '#F08A3A',
+  ballDark: '#B85A14',
+  ballSoft: '#FDF0E4',
+
+  panel: '#F3F1EC',
   panelMuted: '#3F8F4A',
   panelBright: '#FFFFFF',
 
@@ -24,8 +31,8 @@ export const theme = {
 
   freeBg: '#E4F0E6',
   freeFg: '#1F4D28',
-  paidBg: '#E8EEF5',
-  paidFg: '#2C4A6E',
+  paidBg: '#FDF0E4',
+  paidFg: '#B85A14',
 
   danger: '#C23B3B',
   warnBg: '#F7EFD8',

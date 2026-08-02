@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from './authStore';
 
 const STORAGE_KEY = 'sportmatchr.profilePhotoUri';
 
@@ -102,6 +103,8 @@ export function profilePhotoPrompt() {
 export async function ensureFacePhotoForMeetup(opts?: {
   remoteAvatarUrl?: string | null;
 }): Promise<boolean> {
+  // Founder preview — skip gate while exploring the product
+  if (useAuthStore.getState().isFounderPreview) return true;
   if (opts?.remoteAvatarUrl) return true;
   const local = await loadSavedProfilePhoto();
   if (local) return true;

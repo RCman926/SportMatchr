@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.border,
   },
   dotOn: {
-    backgroundColor: theme.accentBright,
+    backgroundColor: theme.ball,
   },
   title: {
     fontFamily: theme.fonts.bodyBold,
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   },
   sub: {
     fontFamily: theme.fonts.bodyMed,
-    color: theme.accentDark,
+    color: theme.ballDark,
     fontSize: 13,
     marginTop: 2,
   },
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   },
   cta: {
     fontFamily: theme.fonts.bodyBold,
-    color: theme.accent,
+    color: theme.ball,
     fontSize: 13,
   },
 });

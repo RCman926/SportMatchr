@@ -71,6 +71,7 @@ export default function SolosScreen() {
   const presenceCoords = useLocationStore((s) => s.presenceCoords);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const canAct = useAuthStore((s) => s.canAct);
 
   const load = useCallback(async () => {
     const [solos, online, games] = await Promise.all([
@@ -134,7 +135,7 @@ export default function SolosScreen() {
   };
 
   const openChat = async (action: NonNullable<PendingAction>) => {
-    if (isSignedIn) {
+    if (canAct) {
       const ok = await ensureFacePhotoForMeetup({ remoteAvatarUrl: avatarUrl });
       if (!ok) return;
     }
@@ -205,7 +206,7 @@ export default function SolosScreen() {
             style={[styles.liveBtn, imLive && styles.liveBtnOn]}
             activeOpacity={0.85}
             onPress={async () => {
-              if (!isSignedIn) {
+              if (!canAct) {
                 router.push('/auth');
                 return;
               }
@@ -536,7 +537,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  liveBtnOn: { backgroundColor: theme.accent },
+  liveBtnOn: { backgroundColor: theme.ball },
   liveBtnText: {
     color: theme.accentDark,
     fontFamily: theme.fonts.bodyBold,
@@ -592,7 +593,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
-  badgeHot: { backgroundColor: theme.accent },
+  badgeHot: { backgroundColor: theme.ball },
   badgeText: { color: theme.accentDark, fontSize: 11, fontFamily: theme.fonts.bodyBold },
   badgeHotText: { color: '#FFFFFF' },
   looking: { fontSize: 15, color: theme.ink, marginBottom: 12, marginTop: 8, fontFamily: theme.fonts.body },

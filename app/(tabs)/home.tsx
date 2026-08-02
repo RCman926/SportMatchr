@@ -37,6 +37,8 @@ export default function HomeScreen() {
   const locSource = useLocationStore((s) => s.source);
   const refreshLoc = useLocationStore((s) => s.refresh);
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const canAct = useAuthStore((s) => s.canAct);
+  const isFounderPreview = useAuthStore((s) => s.isFounderPreview);
 
   const nearbyFree = useMemo(
     () => freePlacesNearYou(coords, { sport: sportFilter, limit: 6, seasonAware: true }),
@@ -72,10 +74,10 @@ export default function HomeScreen() {
     .sort((a, b) => a.distanceKm - b.distanceKm);
 
   const onJoin = async (id: string) => {
-    if (isSignedIn) {
+    if (canAct) {
       const ok = await ensureFacePhotoForMeetup({ remoteAvatarUrl: avatarUrl });
       if (!ok) return;
-      await joinSession(id);
+      if (isSignedIn) await joinSession(id);
     }
     router.push({ pathname: '/session/[id]', params: { id } });
   };
@@ -87,14 +89,20 @@ export default function HomeScreen() {
 
       <LookingPulse />
 
-      {source === 'demo' ? (
+      {isFounderPreview ? (
+        <Text style={styles.softNoteText}>
+          Founder preview on — full UI unlocked with sample data (no account).
+        </Text>
+      ) : null}
+
+      {source === 'demo' && !canAct ? (
         <TouchableOpacity
           style={styles.softNote}
           onPress={() => router.push('/auth')}
           activeOpacity={0.85}
         >
           <Text style={styles.softNoteText}>
-            Sample games for a peek — sign in to see who’s actually out.
+            Sample games for a peek — sign in, or open founder preview on the auth screen.
           </Text>
         </TouchableOpacity>
       ) : null}
@@ -114,7 +122,7 @@ export default function HomeScreen() {
       <TouchableOpacity
         style={styles.createBtn}
         activeOpacity={0.85}
-        onPress={() => (isSignedIn ? router.push('/create') : router.push('/auth'))}
+        onPress={() => (canAct ? router.push('/create') : router.push('/auth'))}
       >
         <Text style={styles.createBtnText}>Host a meetup</Text>
       </TouchableOpacity>
@@ -127,6 +135,7 @@ export default function HomeScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.placeScroll}
         contentContainerStyle={styles.placeRow}
       >
         {nearbyFree.map((p) => (
@@ -172,7 +181,7 @@ export default function HomeScreen() {
             <Text style={styles.empty}>
               Quiet right now
               {sportFilter ? ` for ${sportFilter}` : ''}.{' '}
-              {isSignedIn
+              {canAct
                 ? 'Host something — even two people is a start.'
                 : 'Sign in if you want the real board, or host the first one.'}
             </Text>
@@ -286,7 +295,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   createBtn: {
-    backgroundColor: theme.accent,
+    backgroundColor: theme.ball,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -305,14 +314,22 @@ const styles = StyleSheet.create({
     color: theme.ink,
     letterSpacing: 0.3,
   },
-  placeRow: { gap: 10, paddingBottom: 8, marginBottom: 8 },
+  placeScroll: { flexGrow: 0, flexShrink: 0, maxHeight: 110 },
+  placeRow: {
+    gap: 10,
+    paddingBottom: 4,
+    marginBottom: 4,
+    alignItems: 'flex-start',
+  },
   placeCard: {
     width: 160,
     backgroundColor: theme.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.border,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
   },
   placeFree: {
     fontFamily: theme.fonts.bodyBold,
@@ -326,7 +343,7 @@ const styles = StyleSheet.create({
     color: theme.ink,
     fontSize: 14,
     marginTop: 4,
-    minHeight: 36,
+    lineHeight: 18,
   },
   placeMeta: {
     fontFamily: theme.fonts.body,
@@ -351,7 +368,7 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   sport: {
     fontFamily: theme.fonts.bodyBold,
-    color: theme.accent,
+    color: theme.ballDark,
     fontSize: 13,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -386,13 +403,13 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.bodyMed,
   },
   joinBtn: {
-    backgroundColor: theme.accentSoft,
+    backgroundColor: theme.ballSoft,
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
   },
   joinText: {
-    color: theme.accentDark,
+    color: theme.ballDark,
     fontFamily: theme.fonts.bodyBold,
   },
 });

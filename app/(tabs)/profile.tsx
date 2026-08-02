@@ -56,8 +56,11 @@ const RANK = { none: 0, phone: 1, photo: 2, id: 3 } as const;
 
 export default function ProfileScreen() {
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const canAct = useAuthStore((s) => s.canAct);
+  const isFounderPreview = useAuthStore((s) => s.isFounderPreview);
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
+  const exitFounderPreview = useAuthStore((s) => s.exitFounderPreview);
   const presenceCoords = useLocationStore((s) => s.presenceCoords);
 
   const [profile, setProfile] = useState<PlayerProfile>(MY_PROFILE);
@@ -174,6 +177,19 @@ export default function ProfileScreen() {
 
       <Text style={styles.trust}>{trustLabel(profile)}</Text>
 
+      {isFounderPreview ? (
+        <TouchableOpacity
+          style={styles.authBtn}
+          onPress={async () => {
+            await exitFounderPreview();
+            Alert.alert('Founder preview off');
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.authText}>Exit founder preview</Text>
+        </TouchableOpacity>
+      ) : null}
+
       {isSignedIn ? (
         <>
           <TouchableOpacity
@@ -206,7 +222,9 @@ export default function ProfileScreen() {
           onPress={() => router.push('/auth')}
           activeOpacity={0.85}
         >
-          <Text style={styles.authText}>Sign in for live sessions</Text>
+          <Text style={styles.authText}>
+            {isFounderPreview ? 'Create a real account (optional)' : 'Sign in / founder preview'}
+          </Text>
         </TouchableOpacity>
       )}
 
@@ -218,11 +236,11 @@ export default function ProfileScreen() {
         <Switch
           value={lookingNow}
           onValueChange={async (v) => {
-            if (!isSignedIn) {
+            if (!canAct) {
               router.push('/auth');
               return;
             }
-            if (v && !avatarUri) {
+            if (v && !avatarUri && !isFounderPreview) {
               Alert.alert('Add a face photo first', 'Required for safer Go Live.');
               return;
             }
@@ -236,7 +254,7 @@ export default function ProfileScreen() {
             } else {
               await stopLiveSolo();
             }
-            await updateMyProfile({ looking_now: v });
+            if (isSignedIn) await updateMyProfile({ looking_now: v });
           }}
           trackColor={{ false: '#CBD5E1', true: '#0D9488' }}
           thumbColor={lookingNow ? '#0D9488' : '#FFFFFF'}
@@ -273,7 +291,11 @@ export default function ProfileScreen() {
         <Text style={styles.safetyBody}>
           {avatarUri ? 'Face photo set. ' : 'No face photo yet — add one. '}
           You’re {VERIFICATION_LABEL[profile.verification].toLowerCase()}.{' '}
-          {isSignedIn ? 'Signed in to live backend.' : 'Guest — demo mode.'}
+          {isSignedIn
+            ? 'Signed in to live backend.'
+            : isFounderPreview
+              ? 'Founder preview — demo data, full UI.'
+              : 'Guest — demo mode.'}
         </Text>
       </View>
     </ScrollView>

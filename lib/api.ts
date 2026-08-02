@@ -14,6 +14,7 @@ import {
 import { WEDGE } from '../constants/wedge';
 import { getSeasonalPopularSports } from '../constants/sports';
 import { areaLabel } from './location';
+import { useAuthStore } from './authStore';
 
 const DEFAULT_LAT = 45.3989;
 const DEFAULT_LNG = -75.6836;
@@ -128,7 +129,8 @@ export async function listMySessions(): Promise<LiveSession[]> {
 export async function createSession(
   input: CreateSessionInput
 ): Promise<{ id: string; mock: boolean; error?: string }> {
-  if (!supabase) {
+  // Founder preview / no backend — local mock session so you can walk the flow
+  if (!supabase || useAuthStore.getState().isFounderPreview) {
     return { id: `mock-${Date.now()}`, mock: true };
   }
 
@@ -502,7 +504,7 @@ export async function goLiveSolo(
   sport: string = getSeasonalPopularSports()[0] ?? 'Basketball',
   coords?: { lat: number; lng: number }
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!supabase) return { ok: true };
+  if (!supabase || useAuthStore.getState().isFounderPreview) return { ok: true };
   const {
     data: { user },
   } = await supabase.auth.getUser();

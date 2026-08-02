@@ -1,17 +1,51 @@
 import { create } from 'zustand';
 import type { Session, User } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, isSupabaseConfigured } from './supabase';
+
+const FOUNDER_KEY = 'sportmatchr.founderPreview';
 
 type AuthState = {
   user: User | null;
   session: Session | null;
   loading: boolean;
   bootstrapped: boolean;
-  bootstrap: () => Promise<void>;
-  signOut: () => Promise<void>;
+  /** Real Supabase session */
   isSignedIn: boolean;
+  /** Local founder unlock — full UI on demo data, no account */
+  isFounderPreview: boolean;
+  /** Signed in OR founder preview — use for navigation / feature gates */
+  canAct: boolean;
+  bootstrap: () => Promise<void>;
+  enterFounderPreview: () => Promise<void>;
+  exitFounderPreview: () => Promise<void>;
+  signOut: () => Promise<void>;
 };
+
+function computeCanAct(isSignedIn: boolean, isFounderPreview: boolean) {
+  return isSignedIn || isFounderPreview;
+}
+
+async function readFounderFlag(): Promise<boolean> {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search);
+      if (q.get('founder') === '1' || q.get('admin') === '1') {
+        await AsyncStorage.setItem(FOUNDER_KEY, '1');
+        // Clean query so refresh stays clean
+        q.delete('founder');
+        q.delete('admin');
+        const next = `${window.location.pathname}${q.toString() ? `?${q}` : ''}${window.location.hash}`;
+        window.history.replaceState({}, document.title, next);
+        return true;
+      }
+    }
+    return (await AsyncStorage.getItem(FOUNDER_KEY)) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -19,10 +53,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: true,
   bootstrapped: false,
   isSignedIn: false,
+  isFounderPreview: false,
+  canAct: false,
 
   bootstrap: async () => {
+    const founder = await readFounderFlag();
+
     if (!supabase) {
-      set({ loading: false, bootstrapped: true, user: null, session: null, isSignedIn: false });
+      set({
+        loading: false,
+        bootstrapped: true,
+        user: null,
+        session: null,
+        isSignedIn: false,
+        isFounderPreview: founder,
+        canAct: computeCanAct(false, founder),
+      });
       return;
     }
 
@@ -32,7 +78,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (href.includes('access_token') || href.includes('type=magiclink') || href.includes('code=')) {
         try {
           await supabase.auth.exchangeCodeForSession(href).catch(async () => {
-            // Older hash-based links
             const hash = window.location.hash?.replace(/^#/, '') ?? '';
             const params = new URLSearchParams(hash);
             const access_token = params.get('access_token');
@@ -41,7 +86,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               await supabase!.auth.setSession({ access_token, refresh_token });
             }
           });
-          // Clean URL
           window.history.replaceState({}, document.title, window.location.pathname);
         } catch {
           /* continue with getSession */
@@ -50,27 +94,57 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     const { data } = await supabase.auth.getSession();
+    const signedIn = Boolean(data.session?.user);
     set({
       session: data.session,
       user: data.session?.user ?? null,
-      isSignedIn: Boolean(data.session?.user),
+      isSignedIn: signedIn,
+      isFounderPreview: founder,
+      canAct: computeCanAct(signedIn, founder),
       loading: false,
       bootstrapped: true,
     });
 
     supabase.auth.onAuthStateChange((_event, session) => {
+      const nextSignedIn = Boolean(session?.user);
+      const preview = get().isFounderPreview;
       set({
         session,
         user: session?.user ?? null,
-        isSignedIn: Boolean(session?.user),
+        isSignedIn: nextSignedIn,
+        canAct: computeCanAct(nextSignedIn, preview),
         loading: false,
       });
     });
   },
 
+  enterFounderPreview: async () => {
+    await AsyncStorage.setItem(FOUNDER_KEY, '1');
+    const signedIn = get().isSignedIn;
+    set({
+      isFounderPreview: true,
+      canAct: computeCanAct(signedIn, true),
+    });
+  },
+
+  exitFounderPreview: async () => {
+    await AsyncStorage.removeItem(FOUNDER_KEY);
+    const signedIn = get().isSignedIn;
+    set({
+      isFounderPreview: false,
+      canAct: computeCanAct(signedIn, false),
+    });
+  },
+
   signOut: async () => {
     if (supabase) await supabase.auth.signOut();
-    set({ user: null, session: null, isSignedIn: false });
+    const preview = get().isFounderPreview;
+    set({
+      user: null,
+      session: null,
+      isSignedIn: false,
+      canAct: computeCanAct(false, preview),
+    });
   },
 }));
 

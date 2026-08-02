@@ -74,6 +74,8 @@ module.exports = {
   },
   web: {
     favicon: './assets/favicon.png',
+    bundler: 'metro',
+    output: 'single',
   },
   plugins: [
     'expo-router',

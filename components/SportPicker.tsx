@@ -408,8 +408,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   filterChipOn: {
-    backgroundColor: '#0D9488',
-    borderColor: '#0D9488',
+    backgroundColor: '#E87722',
+    borderColor: '#E87722',
   },
   filterText: {
     color: '#334155',

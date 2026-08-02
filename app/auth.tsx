@@ -39,6 +39,8 @@ export default function AuthScreen() {
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
+  const enterFounderPreview = useAuthStore((s) => s.enterFounderPreview);
+  const isFounderPreview = useAuthStore((s) => s.isFounderPreview);
 
   const finishSignedIn = async (userId: string, userEmail?: string | null) => {
     await ensureProfile(userId, userEmail);
@@ -173,7 +175,24 @@ export default function AuthScreen() {
 
       <Text style={styles.header}>Come play</Text>
       <Text style={styles.sub}>
-        Glebe / Centretown pickleball and more. Make an account so you can host and join real games.
+        Free places near you — any activity. Sign in for the live board, or try founder preview
+        first (no account).
+      </Text>
+
+      <TouchableOpacity
+        style={styles.founderBtn}
+        onPress={async () => {
+          await enterFounderPreview();
+          router.replace('/(tabs)/home');
+        }}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.founderBtnText}>
+          {isFounderPreview ? 'Founder preview already on — go home' : 'Enter founder preview (no sign-in)'}
+        </Text>
+      </TouchableOpacity>
+      <Text style={styles.founderHint}>
+        Unlocks host / join / looking with sample Ottawa data so you can click through everything.
       </Text>
 
       {mode !== 'supabase' ? (
@@ -268,6 +287,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  founderBtn: {
+    backgroundColor: '#2F6B3A',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  founderBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
+  founderHint: {
+    color: '#64748B',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 20,
+  },
   secondary: {
     marginTop: 12,
     backgroundColor: '#CCFBF1',

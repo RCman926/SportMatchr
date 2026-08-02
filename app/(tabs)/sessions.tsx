@@ -18,6 +18,8 @@ export default function SessionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const canAct = useAuthStore((s) => s.canAct);
+  const isFounderPreview = useAuthStore((s) => s.isFounderPreview);
 
   const load = useCallback(async () => {
     if (!isSignedIn) {
@@ -44,15 +46,21 @@ export default function SessionsScreen() {
         Recurring hosts win {WEDGE.pocketName}. Open chat · rematch · next week.
       </Text>
 
-      {!isSignedIn ? (
+      {!canAct ? (
         <TouchableOpacity style={styles.create} onPress={() => router.push('/auth')} activeOpacity={0.85}>
-          <Text style={styles.createText}>Sign in to see your sessions</Text>
+          <Text style={styles.createText}>Sign in or founder preview</Text>
         </TouchableOpacity>
       ) : (
         <TouchableOpacity style={styles.create} onPress={() => router.push('/create')} activeOpacity={0.85}>
           <Text style={styles.createText}>+ Host a recurring pickup</Text>
         </TouchableOpacity>
       )}
+
+      {isFounderPreview && !isSignedIn ? (
+        <Text style={styles.empty}>
+          Founder preview: host from Home/Create — sessions here show up once you use a real account.
+        </Text>
+      ) : null}
 
       {loading ? (
         <ActivityIndicator color="#0D9488" />
