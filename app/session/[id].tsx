@@ -17,12 +17,17 @@ import {
   getSessionById,
   joinSession,
   listMessages,
+  listSessionMembers,
   markHere,
+  removeSessionMember,
   sendMessage,
   submitFeedback,
   subscribeMessages,
   LiveSession,
+  SessionMember,
 } from '../../lib/api';
+import { bookingDetailChips } from '../../constants/booking';
+import { VerifiedBadge } from '../../components/VerifiedBadge';
 import { useAuthStore } from '../../lib/authStore';
 
 function goBackToApp() {
@@ -43,14 +48,22 @@ export default function SessionDetailScreen() {
     players?: string;
     max?: string;
     recurring?: string;
+    genderPlay?: string;
+    ageGroup?: string;
+    skillLevel?: string;
+    notes?: string;
   }>();
 
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const myUserId = useAuthStore((s) => s.user?.id ?? null);
   const [liveSession, setLiveSession] = useState<LiveSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [here, setHere] = useState(false);
   const [rated, setRated] = useState(false);
+  const [members, setMembers] = useState<SessionMember[]>([]);
+  const [memberFilter, setMemberFilter] = useState('');
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   const session = useMemo(() => {
     if (liveSession) {
@@ -73,6 +86,44 @@ export default function SessionDetailScreen() {
     };
   }, [liveSession, params]);
 
+  const detailChips = useMemo(
+    () =>
+      bookingDetailChips({
+        genderPlay: params.genderPlay,
+        ageGroup: params.ageGroup,
+        skillLevel: params.skillLevel,
+      }),
+    [params.genderPlay, params.ageGroup, params.skillLevel]
+  );
+
+  const isHost = useMemo(() => {
+    if (session.hostId === 'me') return true;
+    if (myUserId && session.hostId === myUserId) return true;
+    return false;
+  }, [session.hostId, myUserId]);
+
+  const filteredMembers = useMemo(() => {
+    const q = memberFilter.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        (m.skill ?? '').toLowerCase().includes(q) ||
+        (m.neighbourhood ?? '').toLowerCase().includes(q)
+    );
+  }, [members, memberFilter]);
+
+  const onRemoveMember = async (member: SessionMember) => {
+    setConfirmRemoveId(null);
+    const prev = members;
+    setMembers((list) => list.filter((m) => m.userId !== member.userId));
+    const res = await removeSessionMember(session.id, member.userId);
+    if (!res.ok) {
+      setMembers(prev); // revert on failure
+      Alert.alert('Could not remove', res.error ?? 'Try again.');
+    }
+  };
+
   useEffect(() => {
     let alive = true;
     let unsub: (() => void) | undefined;
@@ -86,6 +137,12 @@ export default function SessionDetailScreen() {
 
       const msgs = await listMessages(params.id ?? 'solo', { live: isSignedIn });
       if (alive) setMessages(msgs);
+
+      const threadId = params.id ?? 'solo';
+      if (!threadId.startsWith('solo')) {
+        const roster = await listSessionMembers(threadId);
+        if (alive) setMembers(roster);
+      }
 
       if (isSignedIn && params.id) {
         unsub = subscribeMessages(params.id, (msg) => {
@@ -201,7 +258,17 @@ export default function SessionDetailScreen() {
               {isSignedIn ? 'Live group chat' : 'Demo chat (sign in for live)'}
             </Text>
             {session.recurring ? <Text style={styles.recurring}>↻ {session.recurring}</Text> : null}
+            {detailChips.length ? (
+              <View style={styles.detailChips}>
+                {detailChips.map((c) => (
+                  <View key={c} style={styles.detailChip}>
+                    <Text style={styles.detailChipText}>{c}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             {session.description ? <Text style={styles.desc}>{session.description}</Text> : null}
+            {params.notes ? <Text style={styles.notes}>“{params.notes}”</Text> : null}
             <View style={styles.safety}>
               <Text style={styles.safetyText}>
                 Safety: meet at the public court only. Don’t share your address.
@@ -254,6 +321,81 @@ export default function SessionDetailScreen() {
               </Text>
             )}
           </View>
+
+          {members.length > 0 ? (
+            <View style={styles.players}>
+              <View style={styles.playersHead}>
+                <Text style={styles.playersTitle}>Players ({members.length})</Text>
+                {isHost ? <Text style={styles.hostTag}>You host</Text> : null}
+              </View>
+
+              {members.length > 3 ? (
+                <TextInput
+                  style={styles.filterInput}
+                  placeholder="Filter players by name, level…"
+                  placeholderTextColor="#94A3B8"
+                  value={memberFilter}
+                  onChangeText={setMemberFilter}
+                  autoCorrect={false}
+                />
+              ) : null}
+
+              <ScrollView style={styles.playersList} showsVerticalScrollIndicator={false}>
+                {filteredMembers.map((m) => {
+                  const confirming = confirmRemoveId === m.userId;
+                  return (
+                    <View key={m.userId} style={styles.playerRow}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{m.name.slice(0, 1).toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.playerNameRow}>
+                          <Text style={styles.playerName}>{m.name}</Text>
+                          <VerifiedBadge level={m.verification} compact />
+                        </View>
+                        <Text style={styles.playerMeta}>
+                          {m.role === 'host' ? 'Host' : m.skill ? `${m.skill}` : 'Player'}
+                          {m.neighbourhood ? ` · ${m.neighbourhood}` : ''}
+                        </Text>
+                      </View>
+
+                      {isHost && m.role !== 'host' ? (
+                        confirming ? (
+                          <View style={styles.confirmRow}>
+                            <TouchableOpacity
+                              style={styles.confirmBtn}
+                              onPress={() => onRemoveMember(m)}
+                              activeOpacity={0.85}
+                            >
+                              <Text style={styles.confirmText}>Remove</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.cancelBtn}
+                              onPress={() => setConfirmRemoveId(null)}
+                              activeOpacity={0.85}
+                            >
+                              <Text style={styles.cancelText}>Keep</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={styles.removeBtn}
+                            onPress={() => setConfirmRemoveId(m.userId)}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.removeText}>Remove</Text>
+                          </TouchableOpacity>
+                        )
+                      ) : null}
+                    </View>
+                  );
+                })}
+                {filteredMembers.length === 0 ? (
+                  <Text style={styles.playersEmpty}>No players match “{memberFilter}”.</Text>
+                ) : null}
+              </ScrollView>
+            </View>
+          ) : null}
 
           <Text style={styles.chatLabel}>Group chat</Text>
 
@@ -308,7 +450,22 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '800', color: '#0F172A' },
   meta: { marginTop: 4, color: '#64748B', fontSize: 13 },
   recurring: { marginTop: 6, color: '#14B8A6', fontWeight: '700', fontSize: 12 },
+  detailChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  detailChip: {
+    backgroundColor: '#CCFBF1',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  detailChipText: { color: '#0F766E', fontWeight: '700', fontSize: 12 },
   desc: { marginTop: 8, color: '#334155', fontSize: 14, lineHeight: 20 },
+  notes: {
+    marginTop: 8,
+    color: '#475569',
+    fontSize: 14,
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
   safety: {
     marginTop: 12,
     backgroundColor: '#CCFBF1',
@@ -348,6 +505,87 @@ const styles = StyleSheet.create({
   },
   noText: { color: '#64748B', fontWeight: '700' },
   rated: { marginTop: 10, color: '#64748B', fontSize: 12 },
+  players: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  playersHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  playersTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  hostTag: {
+    color: '#0F766E',
+    fontWeight: '800',
+    fontSize: 11,
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  filterInput: {
+    backgroundColor: '#F4F6F8',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#0F172A',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  playersList: { maxHeight: 220 },
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#CCFBF1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: '#0F766E', fontWeight: '800', fontSize: 15 },
+  playerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  playerName: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+  playerMeta: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  removeBtn: {
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  removeText: { color: '#C23B3B', fontWeight: '800', fontSize: 12 },
+  confirmRow: { flexDirection: 'row', gap: 6 },
+  confirmBtn: {
+    backgroundColor: '#C23B3B',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  confirmText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
+  cancelBtn: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cancelText: { color: '#64748B', fontWeight: '800', fontSize: 12 },
+  playersEmpty: { color: '#64748B', fontSize: 13, paddingVertical: 10 },
   chatLabel: {
     paddingHorizontal: 16,
     paddingTop: 12,

@@ -45,6 +45,17 @@ export type LiveSession = MockSession & {
   role?: string;
 };
 
+export type SessionMember = {
+  userId: string;
+  name: string;
+  role: 'host' | 'player';
+  showStatus: 'joined' | 'here' | 'showed' | 'no_show';
+  avatarUrl?: string;
+  verification: VerificationLevel;
+  skill?: PlayerProfile['skill'];
+  neighbourhood?: string;
+};
+
 function mapSessionRow(row: any, memberCount = 1): LiveSession {
   return {
     id: row.id,
@@ -204,6 +215,93 @@ export async function getSessionById(id: string): Promise<LiveSession | null> {
     ? Number((data as any).session_members[0]?.count ?? 1)
     : 1;
   return mapSessionRow(data, count);
+}
+
+/** Demo roster used when there's no live backend (guest / preview mode). */
+function demoRoster(): SessionMember[] {
+  const pick = (id: string, role: 'host' | 'player'): SessionMember | null => {
+    const p = PROFILES[id];
+    if (!p) return null;
+    return {
+      userId: p.id,
+      name: p.name,
+      role,
+      showStatus: 'joined',
+      avatarUrl: p.avatarUrl,
+      verification: p.verification,
+      skill: p.skill,
+      neighbourhood: p.neighbourhood,
+    };
+  };
+  return [
+    pick('me', 'host'),
+    pick('sam', 'player'),
+    pick('alex', 'player'),
+    pick('jordan', 'player'),
+    pick('casey', 'player'),
+  ].filter(Boolean) as SessionMember[];
+}
+
+/** Players who have joined a session, host first. */
+export async function listSessionMembers(sessionId: string): Promise<SessionMember[]> {
+  if (!supabase || sessionId.startsWith('solo') || sessionId.startsWith('mock-')) {
+    return demoRoster();
+  }
+
+  const { data, error } = await supabase
+    .from('session_members')
+    .select(
+      'user_id, role, show_status, profiles:user_id(display_name, avatar_url, verification, skill, neighbourhood)'
+    )
+    .eq('session_id', sessionId);
+
+  if (error || !data) {
+    console.warn('listSessionMembers', error?.message);
+    return [];
+  }
+
+  const members: SessionMember[] = data.map((row: any) => ({
+    userId: row.user_id,
+    name: row.profiles?.display_name ?? 'Player',
+    role: row.role === 'host' ? 'host' : 'player',
+    showStatus: row.show_status ?? 'joined',
+    avatarUrl: row.profiles?.avatar_url ?? undefined,
+    verification: (row.profiles?.verification as VerificationLevel) ?? 'none',
+    skill: row.profiles?.skill ?? undefined,
+    neighbourhood: row.profiles?.neighbourhood ?? undefined,
+  }));
+
+  // Host first, then joined order.
+  return members.sort((a, b) => (a.role === 'host' ? -1 : b.role === 'host' ? 1 : 0));
+}
+
+/**
+ * Host-only: remove a player from a session. Hosts cannot remove themselves.
+ * Live removal needs the host delete policy from the session_members migration.
+ */
+export async function removeSessionMember(
+  sessionId: string,
+  userId: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase || sessionId.startsWith('solo') || sessionId.startsWith('mock-')) {
+    return { ok: true };
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'Sign in required' };
+  if (user.id === userId) return { ok: false, error: "You can't remove yourself as host" };
+
+  const { error } = await supabase
+    .from('session_members')
+    .delete()
+    .eq('session_id', sessionId)
+    .eq('user_id', userId)
+    .neq('role', 'host');
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 export async function markHere(sessionId: string): Promise<boolean> {

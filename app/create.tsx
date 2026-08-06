@@ -11,18 +11,41 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SportPicker } from '../components/SportPicker';
+import { OptionChips } from '../components/OptionChips';
+import { DateTimeField } from '../components/DateTimeField';
 import { WEDGE } from '../constants/wedge';
 import { getSeasonalPopularSports } from '../constants/sports';
+import {
+  GENDER_PLAY_OPTIONS,
+  AGE_GROUP_OPTIONS,
+  SKILL_LEVEL_OPTIONS,
+  DEFAULT_GENDER_PLAY,
+  DEFAULT_AGE_GROUP,
+  DEFAULT_SKILL_LEVEL,
+  composeSessionDescription,
+} from '../constants/booking';
 import { createSession } from '../lib/api';
 import { useAuthStore } from '../lib/authStore';
 import { useLocationStore } from '../lib/locationStore';
 import { haversineKm } from '../lib/location';
 import { listFreePlaces } from '../lib/places';
 
+/** Default the first game to the next round hour, at least 1h out. */
+function defaultStartsAt(): Date {
+  const d = new Date();
+  d.setHours(d.getHours() + 1, 0, 0, 0);
+  return d;
+}
+
 export default function CreateSessionScreen() {
   const [sport, setSport] = useState<string | null>(getSeasonalPopularSports()[0] ?? 'Basketball');
   const [title, setTitle] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('8');
+  const [startsAt, setStartsAt] = useState<Date>(defaultStartsAt);
+  const [notes, setNotes] = useState('');
+  const [genderPlay, setGenderPlay] = useState(DEFAULT_GENDER_PLAY);
+  const [ageGroup, setAgeGroup] = useState(DEFAULT_AGE_GROUP);
+  const [skillLevel, setSkillLevel] = useState(DEFAULT_SKILL_LEVEL);
   const [recurring, setRecurring] = useState(true);
   const [recurringLabel, setRecurringLabel] = useState('Every Tue 7:00 PM');
   const [saving, setSaving] = useState(false);
@@ -67,16 +90,24 @@ export default function CreateSessionScreen() {
     }
     setSaving(true);
     const sessionTitle = title.trim() || `${sport} pickup`;
+    const base = recurring
+      ? `Recurring host session in ${WEDGE.pocketName}. Free public place only.`
+      : `Pickup in ${WEDGE.pocketName}. Free public place only.`;
+    const description = composeSessionDescription(base, {
+      genderPlay,
+      ageGroup,
+      skillLevel,
+      notes,
+    });
     const result = await createSession({
       sport,
       title: sessionTitle,
       location: location || 'Ottawa',
       courtId,
       maxPlayers: Number(maxPlayers) || 8,
+      startsAt: startsAt.toISOString(),
       recurring: recurring ? recurringLabel.trim() || 'Weekly' : undefined,
-      description: recurring
-        ? `Recurring host session in ${WEDGE.pocketName}. Free public place only.`
-        : `Pickup in ${WEDGE.pocketName}. Free public place only.`,
+      description,
     });
     setSaving(false);
     if (result.error || !result.id) {
@@ -90,10 +121,14 @@ export default function CreateSessionScreen() {
         sport,
         title: sessionTitle,
         location: location || 'Ottawa',
-        time: recurring ? recurringLabel : 'Today',
+        time: recurring ? recurringLabel : startsAt.toLocaleString(),
         players: '1',
         max: maxPlayers || '8',
         recurring: recurring ? recurringLabel : '',
+        genderPlay,
+        ageGroup,
+        skillLevel,
+        notes: notes.trim(),
       },
     });
   };
@@ -148,6 +183,41 @@ export default function CreateSessionScreen() {
           );
         })}
       </ScrollView>
+
+      <DateTimeField label="Date & time" value={startsAt} onChange={setStartsAt} />
+
+      <OptionChips
+        label="Who can join"
+        options={GENDER_PLAY_OPTIONS}
+        selected={genderPlay}
+        onChange={setGenderPlay}
+      />
+
+      <OptionChips
+        label="Age group"
+        options={AGE_GROUP_OPTIONS}
+        selected={ageGroup}
+        onChange={setAgeGroup}
+      />
+
+      <OptionChips
+        label="Level of expertise"
+        options={SKILL_LEVEL_OPTIONS}
+        selected={skillLevel}
+        onChange={setSkillLevel}
+      />
+
+      <Text style={styles.label}>Notes</Text>
+      <TextInput
+        style={[styles.input, styles.notes]}
+        placeholder="Anything to add? Bring water, paddles to share, parking tips…"
+        placeholderTextColor="#94A3B8"
+        value={notes}
+        onChangeText={setNotes}
+        multiline
+        numberOfLines={3}
+        textAlignVertical="top"
+      />
 
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
@@ -236,6 +306,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  notes: { minHeight: 84, paddingTop: 12 },
   courtRow: { gap: 8, paddingBottom: 14 },
   courtChip: {
     backgroundColor: '#FFFFFF',
