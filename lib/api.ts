@@ -248,6 +248,12 @@ export async function listSessionMembers(sessionId: string): Promise<SessionMemb
     return demoRoster();
   }
 
+  // Guests (no auth) can't read live members — show the preview roster instead.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return demoRoster();
+
   const { data, error } = await supabase
     .from('session_members')
     .select(
@@ -255,10 +261,13 @@ export async function listSessionMembers(sessionId: string): Promise<SessionMemb
     )
     .eq('session_id', sessionId);
 
-  if (error || !data) {
-    console.warn('listSessionMembers', error?.message);
+  if (error) {
+    console.warn('listSessionMembers', error.message);
     return [];
   }
+
+  // No live rows (e.g. a demo/mock session while signed in) → preview roster.
+  if (!data || data.length === 0) return demoRoster();
 
   const members: SessionMember[] = data.map((row: any) => ({
     userId: row.user_id,
@@ -290,7 +299,8 @@ export async function removeSessionMember(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: 'Sign in required' };
+  // Guest / preview mode: removal is local-only, treat as success.
+  if (!user) return { ok: true };
   if (user.id === userId) return { ok: false, error: "You can't remove yourself as host" };
 
   const { error } = await supabase
