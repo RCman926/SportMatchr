@@ -12,12 +12,18 @@ function pad(n: number): string {
   return n.toString().padStart(2, '0');
 }
 
+function safeDate(d: Date): Date {
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
 function toDateInputValue(d: Date): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const s = safeDate(d);
+  return `${s.getFullYear()}-${pad(s.getMonth() + 1)}-${pad(s.getDate())}`;
 }
 
 function toTimeInputValue(d: Date): string {
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const s = safeDate(d);
+  return `${pad(s.getHours())}:${pad(s.getMinutes())}`;
 }
 
 const NATIVE_TIMES = ['08:00', '12:00', '17:00', '18:30', '19:00', '20:00'];
@@ -38,16 +44,18 @@ export function DateTimeField({ label, value, onChange }: Props) {
     });
   }, []);
 
+  const base = safeDate(value);
+
   const setDatePart = (year: number, month: number, day: number) => {
-    const next = new Date(value);
+    const next = new Date(base);
     next.setFullYear(year, month, day);
-    onChange(next);
+    if (!Number.isNaN(next.getTime())) onChange(next);
   };
 
   const setTimePart = (hours: number, minutes: number) => {
-    const next = new Date(value);
+    const next = new Date(base);
     next.setHours(hours, minutes, 0, 0);
-    onChange(next);
+    if (!Number.isNaN(next.getTime())) onChange(next);
   };
 
   if (Platform.OS === 'web') {
@@ -61,8 +69,10 @@ export function DateTimeField({ label, value, onChange }: Props) {
             value={toDateInputValue(value)}
             min={toDateInputValue(new Date())}
             onChange={(e) => {
-              const [y, m, d] = e.target.value.split('-').map(Number);
-              if (y && m && d) setDatePart(y, m - 1, d);
+              const parts = e.target.value.split('-').map(Number);
+              if (parts.length === 3 && parts.every((n) => Number.isFinite(n)) && parts[0] > 0) {
+                setDatePart(parts[0], parts[1] - 1, parts[2]);
+              }
             }}
             style={webInputStyle}
           />
@@ -70,13 +80,15 @@ export function DateTimeField({ label, value, onChange }: Props) {
             type="time"
             value={toTimeInputValue(value)}
             onChange={(e) => {
-              const [h, min] = e.target.value.split(':').map(Number);
-              if (!Number.isNaN(h) && !Number.isNaN(min)) setTimePart(h, min);
+              const parts = e.target.value.split(':').map(Number);
+              if (parts.length >= 2 && parts.every((n) => Number.isFinite(n))) {
+                setTimePart(parts[0], parts[1]);
+              }
             }}
             style={webInputStyle}
           />
         </View>
-        <Text style={styles.preview}>{value.toLocaleString()}</Text>
+        <Text style={styles.preview}>{base.toLocaleString()}</Text>
       </View>
     );
   }
@@ -121,7 +133,7 @@ export function DateTimeField({ label, value, onChange }: Props) {
           );
         })}
       </View>
-      <Text style={styles.preview}>{value.toLocaleString()}</Text>
+      <Text style={styles.preview}>{base.toLocaleString()}</Text>
     </View>
   );
 }
