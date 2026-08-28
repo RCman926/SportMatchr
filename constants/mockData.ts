@@ -12,6 +12,8 @@ export type PlayerProfile = {
   sports: string[];
   skill: 'Beginner' | 'Intermediate' | 'Advanced' | 'Any';
   intensity?: 'casual' | 'competitive' | 'any';
+  /** Self-reported gender identity (optional). */
+  gender?: 'woman' | 'man' | 'nonbinary' | 'unspecified';
   verification: VerificationLevel;
   /** Real face photo URL — required for safety so people recognize you at the court */
   avatarUrl?: string;
@@ -96,6 +98,7 @@ export const MY_PROFILE: PlayerProfile = {
   sports: ['Pickleball', 'Basketball'],
   skill: 'Intermediate',
   intensity: 'casual',
+  gender: 'man',
   verification: 'phone',
   avatarUrl: undefined,
   gamesPlayed: 12,
@@ -123,6 +126,7 @@ export const PROFILES: Record<string, PlayerProfile> = {
     skill: 'Beginner',
     intensity: 'casual',
     verification: 'phone',
+    gender: 'woman',
     avatarUrl: 'https://randomuser.me/api/portraits/women/44.jpg',
     gamesPlayed: 4,
     rating: 5.0,
@@ -146,6 +150,7 @@ export const PROFILES: Record<string, PlayerProfile> = {
     skill: 'Intermediate',
     intensity: 'casual',
     verification: 'phone',
+    gender: 'man',
     avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
     gamesPlayed: 36,
     rating: 4.9,
@@ -169,6 +174,7 @@ export const PROFILES: Record<string, PlayerProfile> = {
     skill: 'Intermediate',
     intensity: 'any',
     verification: 'phone',
+    gender: 'man',
     avatarUrl: 'https://randomuser.me/api/portraits/men/75.jpg',
     gamesPlayed: 48,
     rating: 4.9,
@@ -190,6 +196,7 @@ export const PROFILES: Record<string, PlayerProfile> = {
     skill: 'Any',
     intensity: 'casual',
     verification: 'photo',
+    gender: 'woman',
     avatarUrl: 'https://randomuser.me/api/portraits/women/68.jpg',
     gamesPlayed: 21,
     rating: 4.7,
@@ -210,6 +217,7 @@ export const PROFILES: Record<string, PlayerProfile> = {
     sports: ['Soccer', 'Pickleball'],
     skill: 'Beginner',
     intensity: 'casual',
+    gender: 'nonbinary',
     verification: 'none',
     avatarUrl: undefined,
     gamesPlayed: 8,

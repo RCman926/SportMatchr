@@ -26,9 +26,11 @@ import {
   LiveSession,
   SessionMember,
 } from '../../lib/api';
-import { bookingDetailChips } from '../../constants/booking';
+import { bookingDetailChips, genderGateReason } from '../../constants/booking';
 import { VerifiedBadge } from '../../components/VerifiedBadge';
+import { ReportSheet } from '../../components/ReportSheet';
 import { useAuthStore } from '../../lib/authStore';
+import { useProfileStore } from '../../lib/profileStore';
 
 function goBackToApp() {
   if (router.canGoBack()) {
@@ -64,6 +66,8 @@ export default function SessionDetailScreen() {
   const [members, setMembers] = useState<SessionMember[]>([]);
   const [memberFilter, setMemberFilter] = useState('');
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [showReport, setShowReport] = useState(false);
+  const myGender = useProfileStore((s) => s.gender);
 
   const session = useMemo(() => {
     if (liveSession) {
@@ -86,15 +90,23 @@ export default function SessionDetailScreen() {
     };
   }, [liveSession, params]);
 
+  const genderPlay = params.genderPlay ?? liveSession?.genderPlay;
+
   const detailChips = useMemo(
     () =>
       bookingDetailChips({
-        genderPlay: params.genderPlay,
-        ageGroup: params.ageGroup,
-        skillLevel: params.skillLevel,
+        genderPlay,
+        ageGroup: params.ageGroup ?? liveSession?.ageGroup,
+        skillLevel: params.skillLevel ?? liveSession?.skillLevel,
       }),
-    [params.genderPlay, params.ageGroup, params.skillLevel]
+    [genderPlay, params.ageGroup, params.skillLevel, liveSession]
   );
+
+  const gateReason = useMemo(
+    () => genderGateReason(genderPlay, myGender),
+    [genderPlay, myGender]
+  );
+  const blocked = Boolean(gateReason);
 
   const isHost = useMemo(() => {
     if (session.hostId === 'me') return true;
@@ -130,7 +142,9 @@ export default function SessionDetailScreen() {
 
     (async () => {
       if (isSignedIn && params.id && !params.id.startsWith('solo-') && !params.id.startsWith('mock-')) {
-        await joinSession(params.id);
+        // Don't auto-join a women-only game the viewer can't join.
+        const blockedForJoin = Boolean(genderGateReason(params.genderPlay, myGender));
+        if (!blockedForJoin) await joinSession(params.id);
         const s = await getSessionById(params.id);
         if (alive && s) setLiveSession(s);
       }
@@ -155,7 +169,7 @@ export default function SessionDetailScreen() {
       alive = false;
       unsub?.();
     };
-  }, [params.id, isSignedIn]);
+  }, [params.id, isSignedIn, params.genderPlay, myGender]);
 
   const send = async () => {
     const text = draft.trim();
@@ -269,12 +283,29 @@ export default function SessionDetailScreen() {
             ) : null}
             {session.description ? <Text style={styles.desc}>{session.description}</Text> : null}
             {params.notes ? <Text style={styles.notes}>“{params.notes}”</Text> : null}
+
+            {blocked ? (
+              <View style={styles.blockCard}>
+                <Text style={styles.blockTitle}>Women-only game</Text>
+                <Text style={styles.blockBody}>{gateReason}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.safety}>
               <Text style={styles.safetyText}>
                 Safety: meet at the public court only. Don’t share your address.
               </Text>
+              <TouchableOpacity
+                style={styles.reportBtn}
+                onPress={() => setShowReport(true)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.reportText}>Report</Text>
+              </TouchableOpacity>
             </View>
 
+            {!blocked ? (
+            <>
             <View style={styles.retentionRow}>
               <TouchableOpacity
                 style={[styles.retBtn, here && styles.retBtnOn]}
@@ -320,9 +351,11 @@ export default function SessionDetailScreen() {
                 Thanks — that only updates show-up / rematch trust, not how well they play.
               </Text>
             )}
+            </>
+            ) : null}
           </View>
 
-          {members.length > 0 ? (
+          {members.length > 0 && !blocked ? (
             <View style={styles.players}>
               <View style={styles.playersHead}>
                 <Text style={styles.playersTitle}>Players ({members.length})</Text>
@@ -397,41 +430,59 @@ export default function SessionDetailScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.chatLabel}>Group chat</Text>
+          {blocked ? (
+            <View style={styles.blockedChat}>
+              <Text style={styles.blockedChatText}>
+                The group chat opens once you can join this game.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.chatLabel}>Group chat</Text>
 
-          <ScrollView
-            style={styles.chat}
-            contentContainerStyle={styles.chatContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {messages.map((m) => (
-              <View
-                key={m.id}
-                style={[styles.bubble, m.mine ? styles.bubbleMine : styles.bubbleOther]}
+              <ScrollView
+                style={styles.chat}
+                contentContainerStyle={styles.chatContent}
+                showsVerticalScrollIndicator={false}
               >
-                {!m.mine && <Text style={styles.sender}>{m.sender}</Text>}
-                <Text style={[styles.bubbleText, m.mine && styles.bubbleTextMine]}>{m.text}</Text>
-                <Text style={[styles.at, m.mine && styles.atMine]}>{m.at}</Text>
-              </View>
-            ))}
-          </ScrollView>
+                {messages.map((m) => (
+                  <View
+                    key={m.id}
+                    style={[styles.bubble, m.mine ? styles.bubbleMine : styles.bubbleOther]}
+                  >
+                    {!m.mine && <Text style={styles.sender}>{m.sender}</Text>}
+                    <Text style={[styles.bubbleText, m.mine && styles.bubbleTextMine]}>{m.text}</Text>
+                    <Text style={[styles.at, m.mine && styles.atMine]}>{m.at}</Text>
+                  </View>
+                ))}
+              </ScrollView>
 
-          <View style={styles.composer}>
-            <TextInput
-              style={styles.input}
-              placeholder={isSignedIn ? 'Message the group…' : 'Demo chat — messages stay on this device'}
-              placeholderTextColor="#94A3B8"
-              value={draft}
-              onChangeText={setDraft}
-              onSubmitEditing={send}
-              returnKeyType="send"
-            />
-            <TouchableOpacity style={styles.sendBtn} onPress={send} activeOpacity={0.85}>
-              <Text style={styles.sendText}>Send</Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.composer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder={isSignedIn ? 'Message the group…' : 'Demo chat — messages stay on this device'}
+                  placeholderTextColor="#94A3B8"
+                  value={draft}
+                  onChangeText={setDraft}
+                  onSubmitEditing={send}
+                  returnKeyType="send"
+                />
+                <TouchableOpacity style={styles.sendBtn} onPress={send} activeOpacity={0.85}>
+                  <Text style={styles.sendText}>Send</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
+
+      <ReportSheet
+        visible={showReport}
+        targetType="session"
+        targetId={session.id}
+        targetLabel="this game"
+        onClose={() => setShowReport(false)}
+      />
     </>
   );
 }
@@ -471,8 +522,34 @@ const styles = StyleSheet.create({
     backgroundColor: '#CCFBF1',
     borderRadius: 10,
     padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  safetyText: { color: '#0F766E', fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  safetyText: { color: '#0F766E', fontSize: 12, lineHeight: 17, fontWeight: '600', flex: 1 },
+  reportBtn: {
+    borderWidth: 1,
+    borderColor: '#0F766E',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  reportText: { color: '#0F766E', fontWeight: '800', fontSize: 12 },
+  blockCard: {
+    marginTop: 12,
+    backgroundColor: '#F7EFD8',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E7D9AE',
+  },
+  blockTitle: { color: '#7A5A1E', fontWeight: '800', fontSize: 15, marginBottom: 4 },
+  blockBody: { color: '#7A5A1E', fontSize: 13, lineHeight: 19 },
+  blockedChat: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  blockedChatText: { color: '#64748B', fontSize: 13, textAlign: 'center', lineHeight: 19 },
   retentionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   retBtn: {
     flex: 1,

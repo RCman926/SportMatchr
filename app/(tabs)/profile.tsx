@@ -19,6 +19,9 @@ import {
 import { VerifiedBadge } from '../../components/VerifiedBadge';
 import { ProfileAvatar } from '../../components/ProfileAvatar';
 import { SportPicker } from '../../components/SportPicker';
+import { OptionChips } from '../../components/OptionChips';
+import { GENDER_IDENTITY_OPTIONS } from '../../constants/booking';
+import { useProfileStore } from '../../lib/profileStore';
 import { getSeasonalPopularSports } from '../../constants/sports';
 import { WEDGE } from '../../constants/wedge';
 import {
@@ -65,6 +68,8 @@ export default function ProfileScreen() {
   const [sports, setSports] = useState<string[]>(['Pickleball']);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const gender = useProfileStore((s) => s.gender);
+  const setGender = useProfileStore((s) => s.setGender);
 
   const load = useCallback(async () => {
     if (!isSignedIn) {
@@ -72,6 +77,7 @@ export default function ProfileScreen() {
       setLookingNow(MY_PROFILE.lookingNow);
       setSports([...MY_PROFILE.sports]);
       setAvatarUri(MY_PROFILE.avatarUrl ?? null);
+      setGender(MY_PROFILE.gender ?? 'unspecified');
       setLoading(false);
       return;
     }
@@ -81,9 +87,18 @@ export default function ProfileScreen() {
       setLookingNow(me.lookingNow);
       setSports(me.sports);
       setAvatarUri(me.avatarUrl ?? null);
+      setGender(me.gender ?? 'unspecified');
     }
     setLoading(false);
-  }, [isSignedIn]);
+  }, [isSignedIn, setGender]);
+
+  const onChangeGender = useCallback(
+    (value: string) => {
+      setGender(value);
+      if (isSignedIn) void updateMyProfile({ gender: value });
+    },
+    [isSignedIn, setGender]
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -248,6 +263,16 @@ export default function ProfileScreen() {
         Pickleball first in {WEDGE.pocketName}. Other sports stay available.
       </Text>
 
+      <View style={styles.genderCard}>
+        <OptionChips
+          label="Gender (optional)"
+          hint="Only used to power women-only games. You can pick “Prefer not to say.”"
+          options={GENDER_IDENTITY_OPTIONS}
+          selected={gender}
+          onChange={onChangeGender}
+        />
+      </View>
+
       <Text style={styles.section}>Trust — face photo + sign in</Text>
       <Text style={styles.sectionSub}>
         Real face photo is required. Email magic link is live. Phone/ID come later.
@@ -360,6 +385,14 @@ const styles = StyleSheet.create({
     marginTop: -8,
     marginBottom: 20,
     lineHeight: 17,
+  },
+  genderCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
   },
   section: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 6 },
   sectionSub: { color: '#64748B', fontSize: 13, lineHeight: 18, marginBottom: 12 },

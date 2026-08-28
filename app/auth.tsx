@@ -17,8 +17,12 @@ import {
   seedFounderSessions,
   signInWithPassword,
   signUpWithPassword,
+  updateMyProfile,
 } from '../lib/api';
 import { useAuthStore } from '../lib/authStore';
+import { useProfileStore } from '../lib/profileStore';
+import { OptionChips } from '../components/OptionChips';
+import { GENDER_IDENTITY_OPTIONS, DEFAULT_GENDER_IDENTITY } from '../constants/booking';
 import { WEDGE } from '../constants/wedge';
 
 function notify(title: string, message?: string) {
@@ -33,8 +37,10 @@ function notify(title: string, message?: string) {
 export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [gender, setGenderLocal] = useState(DEFAULT_GENDER_IDENTITY);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const setGender = useProfileStore((s) => s.setGender);
   const mode = backendMode();
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
   const user = useAuthStore((s) => s.user);
@@ -88,6 +94,8 @@ export default function AuthScreen() {
       return;
     }
     if (data.user && data.session) {
+      setGender(gender);
+      await updateMyProfile({ gender });
       await finishSignedIn(data.user.id, data.user.email);
       return;
     }
@@ -205,6 +213,16 @@ export default function AuthScreen() {
         onChangeText={setPassword}
       />
 
+      <View style={styles.genderBlock}>
+        <OptionChips
+          label="Gender (optional — for new accounts)"
+          hint="Only used to power women-only games. Pick “Prefer not to say” to skip."
+          options={GENDER_IDENTITY_OPTIONS}
+          selected={gender}
+          onChange={setGenderLocal}
+        />
+      </View>
+
       <TouchableOpacity style={styles.btn} onPress={onSignIn} activeOpacity={0.85} disabled={loading}>
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -251,6 +269,7 @@ const styles = StyleSheet.create({
   mode: { color: '#2F6B3A', fontWeight: '700', fontSize: 12, marginBottom: 20 },
   modeWarn: { color: '#7A5A1E', fontWeight: '600', fontSize: 13, marginBottom: 16, lineHeight: 18 },
   label: { color: '#64748B', fontWeight: '700', marginBottom: 8 },
+  genderBlock: { marginBottom: 8 },
   input: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,

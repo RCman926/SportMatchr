@@ -22,6 +22,8 @@ import { freePlacesNearYou } from '../../lib/places';
 import { ensureFacePhotoForMeetup } from '../../lib/profilePhoto';
 import { theme } from '../../constants/theme';
 import { LookingPulse } from '../../components/LookingPulse';
+import { useProfileStore } from '../../lib/profileStore';
+import { genderGateReason } from '../../constants/booking';
 
 export default function HomeScreen() {
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -37,6 +39,7 @@ export default function HomeScreen() {
   const locSource = useLocationStore((s) => s.source);
   const refreshLoc = useLocationStore((s) => s.refresh);
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
+  const myGender = useProfileStore((s) => s.gender);
 
   const nearbyFree = useMemo(
     () => freePlacesNearYou(coords, { sport: sportFilter, limit: 6, seasonAware: true }),
@@ -72,12 +75,18 @@ export default function HomeScreen() {
     .sort((a, b) => a.distanceKm - b.distanceKm);
 
   const onJoin = async (id: string) => {
-    if (isSignedIn) {
+    const target = ranked.find((s) => s.id === id);
+    const genderPlay = target?.genderPlay;
+    const blocked = Boolean(genderGateReason(genderPlay, myGender));
+    if (isSignedIn && !blocked) {
       const ok = await ensureFacePhotoForMeetup({ remoteAvatarUrl: avatarUrl });
       if (!ok) return;
       await joinSession(id);
     }
-    router.push({ pathname: '/session/[id]', params: { id } });
+    router.push({
+      pathname: '/session/[id]',
+      params: genderPlay ? { id, genderPlay } : { id },
+    });
   };
 
   return (

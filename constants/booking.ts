@@ -33,6 +33,39 @@ export const DEFAULT_GENDER_PLAY = GENDER_PLAY_OPTIONS[0].value;
 export const DEFAULT_AGE_GROUP = AGE_GROUP_OPTIONS[0].value;
 export const DEFAULT_SKILL_LEVEL = SKILL_LEVEL_OPTIONS[0].value;
 
+/** A player's self-reported gender identity (inclusive, optional). */
+export const GENDER_IDENTITY_OPTIONS: BookingOption[] = [
+  { value: 'woman', label: 'Woman' },
+  { value: 'man', label: 'Man' },
+  { value: 'nonbinary', label: 'Non-binary' },
+  { value: 'unspecified', label: 'Prefer not to say' },
+];
+
+export const DEFAULT_GENDER_IDENTITY = 'unspecified';
+
+export function genderIdentityLabel(value?: string | null): string | null {
+  if (!value) return null;
+  return GENDER_IDENTITY_OPTIONS.find((o) => o.value === value)?.label ?? null;
+}
+
+/**
+ * Decide whether a player can join a session given its gender-play setting and the
+ * player's self-reported gender. Returns null when allowed, or a friendly reason
+ * string when blocked. Self-reported only — the trust layer (face photo + report)
+ * does the real enforcement at the court.
+ */
+export function genderGateReason(
+  genderPlay: string | null | undefined,
+  myGender: string | null | undefined
+): string | null {
+  if (genderPlay !== 'women') return null;
+  if (myGender === 'woman') return null;
+  if (!myGender || myGender === 'unspecified') {
+    return 'This is a women-only game. Set your gender to Woman on your profile to join.';
+  }
+  return 'This game is women-only, so you can’t join it.';
+}
+
 function labelFor(options: BookingOption[], value?: string | null): string | null {
   if (!value) return null;
   return options.find((o) => o.value === value)?.label ?? null;
