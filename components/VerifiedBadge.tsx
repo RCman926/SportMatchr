@@ -1,14 +1,15 @@
 import { View, Text, StyleSheet } from 'react-native';
+import { theme } from '../constants/theme';
 import {
   VerificationLevel,
   VERIFICATION_LABEL,
 } from '../constants/mockData';
 
 const COLORS: Record<VerificationLevel, { bg: string; fg: string }> = {
-  none: { bg: '#E2E8F0', fg: '#64748B' },
-  phone: { bg: '#CCFBF1', fg: '#0F766E' },
-  photo: { bg: '#99F6E4', fg: '#0F766E' },
-  id: { bg: '#0D9488', fg: '#FFFFFF' },
+  none: { bg: theme.border, fg: theme.muted },
+  phone: { bg: theme.accentSoft, fg: theme.accentDark },
+  photo: { bg: theme.accentSoft, fg: theme.accentDark },
+  id: { bg: theme.accent, fg: '#FFFFFF' },
 };
 
 export function VerifiedBadge({

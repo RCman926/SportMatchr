@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { theme } from '../constants/theme';
 import {
   View,
   Text,
@@ -155,7 +156,7 @@ export default function CreateSessionScreen() {
       <TextInput
         style={styles.input}
         placeholder={`${sport ?? 'Activity'} open play`}
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={theme.muted}
         value={title}
         onChangeText={setTitle}
       />
@@ -211,7 +212,7 @@ export default function CreateSessionScreen() {
       <TextInput
         style={[styles.input, styles.notes]}
         placeholder="Anything to add? Bring water, paddles to share, parking tips…"
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={theme.muted}
         value={notes}
         onChangeText={setNotes}
         multiline
@@ -227,8 +228,8 @@ export default function CreateSessionScreen() {
         <Switch
           value={recurring}
           onValueChange={setRecurring}
-          trackColor={{ false: '#CBD5E1', true: '#0D9488' }}
-          thumbColor={recurring ? '#0D9488' : '#FFFFFF'}
+          trackColor={{ false: theme.border, true: theme.accent }}
+          thumbColor={recurring ? theme.accent : '#FFFFFF'}
         />
       </View>
 
@@ -240,7 +241,7 @@ export default function CreateSessionScreen() {
             value={recurringLabel}
             onChangeText={setRecurringLabel}
             placeholder="Every Tue 7:00 PM"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={theme.muted}
           />
         </>
       ) : null}
@@ -268,26 +269,26 @@ export default function CreateSessionScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F4F6F8' },
+  screen: { flex: 1, backgroundColor: theme.bg },
   container: { padding: 16, paddingBottom: 40 },
   exitBar: {
-    backgroundColor: '#F4F6F8',
+    backgroundColor: theme.bg,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
     marginBottom: 14,
   },
-  exitText: { color: '#0F172A', fontWeight: '800', fontSize: 14 },
-  header: { fontSize: 28, fontWeight: '800', color: '#0F172A' },
-  sub: { color: '#64748B', marginBottom: 20, marginTop: 4, lineHeight: 20 },
+  exitText: { color: theme.ink, fontWeight: '800', fontSize: 14 },
+  header: { fontSize: 28, fontWeight: '800', color: theme.ink },
+  sub: { color: theme.muted, marginBottom: 20, marginTop: 4, lineHeight: 20 },
   label: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#64748B',
+    color: theme.muted,
     marginBottom: 8,
     marginTop: 4,
   },
-  hint: { color: '#64748B', fontSize: 12 },
+  hint: { color: theme.muted, fontSize: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -301,28 +302,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#0F172A',
+    color: theme.ink,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
   },
   notes: { minHeight: 84, paddingTop: 12 },
   courtRow: { gap: 8, paddingBottom: 14 },
   courtChip: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     maxWidth: 200,
   },
-  courtChipOn: { backgroundColor: '#CCFBF1', borderColor: '#0D9488' },
-  courtText: { color: '#334155', fontWeight: '600', fontSize: 13 },
-  courtTextOn: { color: '#14B8A6' },
+  courtChipOn: { backgroundColor: theme.accentSoft, borderColor: theme.accent },
+  courtText: { color: theme.ink, fontWeight: '600', fontSize: 13 },
+  courtTextOn: { color: theme.accentBright },
   createBtn: {
     marginTop: 12,
-    backgroundColor: '#0D9488',
+    backgroundColor: theme.accent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',

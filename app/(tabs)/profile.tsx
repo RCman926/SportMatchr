@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { theme } from '../../constants/theme';
 import {
   View,
   Text,
@@ -134,7 +135,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={[styles.screen, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color="#0D9488" />
+        <ActivityIndicator color={theme.accent} />
       </View>
     );
   }
@@ -253,8 +254,8 @@ export default function ProfileScreen() {
             }
             await updateMyProfile({ looking_now: v });
           }}
-          trackColor={{ false: '#CBD5E1', true: '#0D9488' }}
-          thumbColor={lookingNow ? '#0D9488' : '#FFFFFF'}
+          trackColor={{ false: theme.border, true: theme.accent }}
+          thumbColor={lookingNow ? theme.accent : '#FFFFFF'}
         />
       </View>
 
@@ -306,12 +307,12 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F4F6F8' },
+  screen: { flex: 1, backgroundColor: theme.bg },
   container: { padding: 16, paddingBottom: 40 },
   hero: { alignItems: 'center', marginBottom: 16 },
   photoBtn: {
     marginTop: 10,
-    backgroundColor: '#0D9488',
+    backgroundColor: theme.accent,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
@@ -319,21 +320,21 @@ const styles = StyleSheet.create({
   photoBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
   photoWarn: {
     marginTop: 8,
-    color: '#B45309',
+    color: theme.warnFg,
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
     paddingHorizontal: 16,
     lineHeight: 17,
   },
-  photoOk: { marginTop: 8, color: '#0F766E', fontSize: 12, fontWeight: '700' },
-  name: { fontSize: 28, fontWeight: '800', color: '#0F172A', marginTop: 10 },
-  handle: { fontSize: 14, color: '#64748B', marginTop: 4, marginBottom: 4 },
-  email: { fontSize: 12, color: '#0D9488', marginBottom: 8, fontWeight: '600' },
+  photoOk: { marginTop: 8, color: theme.accentDark, fontSize: 12, fontWeight: '700' },
+  name: { fontSize: 28, fontWeight: '800', color: theme.ink, marginTop: 10 },
+  handle: { fontSize: 14, color: theme.muted, marginTop: 4, marginBottom: 4 },
+  email: { fontSize: 12, color: theme.accent, marginBottom: 8, fontWeight: '600' },
   bio: {
     marginTop: 10,
     textAlign: 'center',
-    color: '#334155',
+    color: theme.ink,
     lineHeight: 20,
     paddingHorizontal: 12,
   },
@@ -344,11 +345,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
   },
   stat: { flex: 1, alignItems: 'center' },
-  statNum: { color: '#0F172A', fontSize: 22, fontWeight: '800' },
-  statLabel: { color: '#0D9488', fontSize: 12, marginTop: 2 },
+  statNum: { color: theme.ink, fontSize: 22, fontWeight: '800' },
+  statLabel: { color: theme.accent, fontSize: 12, marginTop: 2 },
   trust: {
     color: '#5C6B62',
     fontSize: 14,
@@ -357,17 +358,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   authBtn: {
-    backgroundColor: '#CCFBF1',
+    backgroundColor: theme.accentSoft,
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: theme.accent,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
     marginBottom: 10,
   },
-  authText: { color: '#0D9488', fontWeight: '800' },
+  authText: { color: theme.accent, fontWeight: '800' },
   signOutBtn: { alignItems: 'center', marginBottom: 16, padding: 8 },
-  signOutText: { color: '#EF4444', fontWeight: '700' },
+  signOutText: { color: theme.danger, fontWeight: '700' },
   cardRow: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -377,10 +378,10 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 20,
   },
-  label: { fontSize: 13, fontWeight: '700', color: '#64748B', marginBottom: 4 },
-  hint: { fontSize: 13, color: '#64748B' },
+  label: { fontSize: 13, fontWeight: '700', color: theme.muted, marginBottom: 4 },
+  hint: { fontSize: 13, color: theme.muted },
   pickerHint: {
-    color: '#64748B',
+    color: theme.muted,
     fontSize: 12,
     marginTop: -8,
     marginBottom: 20,
@@ -391,11 +392,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
     marginBottom: 20,
   },
-  section: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 6 },
-  sectionSub: { color: '#64748B', fontSize: 13, lineHeight: 18, marginBottom: 12 },
+  section: { fontSize: 18, fontWeight: '800', color: theme.ink, marginBottom: 6 },
+  sectionSub: { color: theme.muted, fontSize: 13, lineHeight: 18, marginBottom: 12 },
   verifyCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -403,18 +404,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   verifyTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  verifyTitle: { fontWeight: '800', color: '#0F172A', fontSize: 15 },
-  verifyStatus: { color: '#64748B', fontWeight: '700', fontSize: 12 },
-  verifyDone: { color: '#0D9488' },
-  verifyDetail: { color: '#64748B', fontSize: 13, lineHeight: 18 },
+  verifyTitle: { fontWeight: '800', color: theme.ink, fontSize: 15 },
+  verifyStatus: { color: theme.muted, fontWeight: '700', fontSize: 12 },
+  verifyDone: { color: theme.accent },
+  verifyDetail: { color: theme.muted, fontSize: 13, lineHeight: 18 },
   safetyCard: {
     marginTop: 8,
-    backgroundColor: '#CCFBF1',
+    backgroundColor: theme.accentSoft,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
   },
-  safetyTitle: { fontWeight: '800', color: '#0D9488', marginBottom: 6 },
-  safetyBody: { color: '#0F766E', lineHeight: 20, fontSize: 13 },
+  safetyTitle: { fontWeight: '800', color: theme.accent, marginBottom: 6 },
+  safetyBody: { color: theme.accentDark, lineHeight: 20, fontSize: 13 },
 });

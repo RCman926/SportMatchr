@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { theme } from '../../constants/theme';
 import {
   View,
   Text,
@@ -247,7 +248,7 @@ export default function SessionDetailScreen() {
           title: session.sport,
           headerLeft: () => (
             <TouchableOpacity onPress={goBackToApp} style={{ paddingHorizontal: 12 }}>
-              <Text style={{ color: '#0D9488', fontWeight: '800', fontSize: 16 }}>← Back</Text>
+              <Text style={{ color: theme.accent, fontWeight: '800', fontSize: 16 }}>← Back</Text>
             </TouchableOpacity>
           ),
         }}
@@ -366,7 +367,7 @@ export default function SessionDetailScreen() {
                 <TextInput
                   style={styles.filterInput}
                   placeholder="Filter players by name, level…"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={theme.muted}
                   value={memberFilter}
                   onChangeText={setMemberFilter}
                   autoCorrect={false}
@@ -461,7 +462,7 @@ export default function SessionDetailScreen() {
                 <TextInput
                   style={styles.input}
                   placeholder={isSignedIn ? 'Message the group…' : 'Demo chat — messages stay on this device'}
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={theme.muted}
                   value={draft}
                   onChangeText={setDraft}
                   onSubmitEditing={send}
@@ -489,85 +490,85 @@ export default function SessionDetailScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F4F6F8' },
-  exitBar: { backgroundColor: '#F4F6F8', paddingVertical: 12, paddingHorizontal: 16 },
-  exitText: { color: '#0F172A', fontWeight: '800', fontSize: 14 },
+  container: { flex: 1, backgroundColor: theme.bg },
+  exitBar: { backgroundColor: theme.bg, paddingVertical: 12, paddingHorizontal: 16 },
+  exitText: { color: theme.ink, fontWeight: '800', fontSize: 14 },
   info: {
     backgroundColor: '#FFFFFF',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: theme.border,
   },
-  title: { fontSize: 20, fontWeight: '800', color: '#0F172A' },
-  meta: { marginTop: 4, color: '#64748B', fontSize: 13 },
-  recurring: { marginTop: 6, color: '#14B8A6', fontWeight: '700', fontSize: 12 },
+  title: { fontSize: 20, fontWeight: '800', color: theme.ink },
+  meta: { marginTop: 4, color: theme.muted, fontSize: 13 },
+  recurring: { marginTop: 6, color: theme.accentBright, fontWeight: '700', fontSize: 12 },
   detailChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   detailChip: {
-    backgroundColor: '#CCFBF1',
+    backgroundColor: theme.accentSoft,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  detailChipText: { color: '#0F766E', fontWeight: '700', fontSize: 12 },
-  desc: { marginTop: 8, color: '#334155', fontSize: 14, lineHeight: 20 },
+  detailChipText: { color: theme.accentDark, fontWeight: '700', fontSize: 12 },
+  desc: { marginTop: 8, color: theme.ink, fontSize: 14, lineHeight: 20 },
   notes: {
     marginTop: 8,
-    color: '#475569',
+    color: theme.muted,
     fontSize: 14,
     lineHeight: 20,
     fontStyle: 'italic',
   },
   safety: {
     marginTop: 12,
-    backgroundColor: '#CCFBF1',
+    backgroundColor: theme.accentSoft,
     borderRadius: 10,
     padding: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  safetyText: { color: '#0F766E', fontSize: 12, lineHeight: 17, fontWeight: '600', flex: 1 },
+  safetyText: { color: theme.accentDark, fontSize: 12, lineHeight: 17, fontWeight: '600', flex: 1 },
   reportBtn: {
     borderWidth: 1,
-    borderColor: '#0F766E',
+    borderColor: theme.accentDark,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  reportText: { color: '#0F766E', fontWeight: '800', fontSize: 12 },
+  reportText: { color: theme.accentDark, fontWeight: '800', fontSize: 12 },
   blockCard: {
     marginTop: 12,
-    backgroundColor: '#F7EFD8',
+    backgroundColor: theme.warnBg,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
     borderColor: '#E7D9AE',
   },
-  blockTitle: { color: '#7A5A1E', fontWeight: '800', fontSize: 15, marginBottom: 4 },
-  blockBody: { color: '#7A5A1E', fontSize: 13, lineHeight: 19 },
+  blockTitle: { color: theme.warnFg, fontWeight: '800', fontSize: 15, marginBottom: 4 },
+  blockBody: { color: theme.warnFg, fontSize: 13, lineHeight: 19 },
   blockedChat: {
     padding: 16,
     alignItems: 'center',
   },
-  blockedChatText: { color: '#64748B', fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  blockedChatText: { color: theme.muted, fontSize: 13, textAlign: 'center', lineHeight: 19 },
   retentionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   retBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: theme.accent,
     borderRadius: 10,
     paddingVertical: 8,
     alignItems: 'center',
-    backgroundColor: '#CCFBF1',
+    backgroundColor: theme.accentSoft,
   },
-  retBtnOn: { backgroundColor: '#0D9488' },
-  retText: { color: '#0D9488', fontWeight: '800', fontSize: 12 },
+  retBtnOn: { backgroundColor: theme.accent },
+  retText: { color: theme.accent, fontWeight: '800', fontSize: 12 },
   retTextOn: { color: '#FFFFFF' },
   rateBlock: { marginTop: 12 },
   rateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  rateLabel: { color: '#334155', fontWeight: '600', fontSize: 13, lineHeight: 18 },
+  rateLabel: { color: theme.ink, fontWeight: '600', fontSize: 13, lineHeight: 18 },
   yesBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: theme.accent,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
@@ -575,17 +576,17 @@ const styles = StyleSheet.create({
   yesText: { color: '#fff', fontWeight: '800' },
   noBtn: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: theme.border,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
   },
-  noText: { color: '#64748B', fontWeight: '700' },
-  rated: { marginTop: 10, color: '#64748B', fontSize: 12 },
+  noText: { color: theme.muted, fontWeight: '700' },
+  rated: { marginTop: 10, color: theme.muted, fontSize: 12 },
   players: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: theme.border,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
@@ -596,26 +597,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  playersTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  playersTitle: { fontSize: 15, fontWeight: '800', color: theme.ink },
   hostTag: {
-    color: '#0F766E',
+    color: theme.accentDark,
     fontWeight: '800',
     fontSize: 11,
-    backgroundColor: '#CCFBF1',
+    backgroundColor: theme.accentSoft,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
   },
   filterInput: {
-    backgroundColor: '#F4F6F8',
+    backgroundColor: theme.bg,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
-    color: '#0F172A',
+    color: theme.ink,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
   },
   playersList: { maxHeight: 220 },
   playerRow: {
@@ -624,20 +625,20 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: theme.border,
   },
   avatar: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#CCFBF1',
+    backgroundColor: theme.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: '#0F766E', fontWeight: '800', fontSize: 15 },
+  avatarText: { color: theme.accentDark, fontWeight: '800', fontSize: 15 },
   playerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  playerName: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-  playerMeta: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  playerName: { fontSize: 14, fontWeight: '700', color: theme.ink },
+  playerMeta: { fontSize: 12, color: theme.muted, marginTop: 2 },
   removeBtn: {
     borderWidth: 1,
     borderColor: '#FCA5A5',
@@ -656,19 +657,19 @@ const styles = StyleSheet.create({
   confirmText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
   cancelBtn: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: theme.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  cancelText: { color: '#64748B', fontWeight: '800', fontSize: 12 },
-  playersEmpty: { color: '#64748B', fontSize: 13, paddingVertical: 10 },
+  cancelText: { color: theme.muted, fontWeight: '800', fontSize: 12 },
+  playersEmpty: { color: theme.muted, fontSize: 13, paddingVertical: 10 },
   chatLabel: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 4,
     fontWeight: '700',
-    color: '#0F172A',
+    color: theme.ink,
   },
   chat: { flex: 1, paddingHorizontal: 16 },
   chatContent: { paddingVertical: 8, gap: 8 },
@@ -679,31 +680,31 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   bubbleOther: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF' },
-  bubbleMine: { alignSelf: 'flex-end', backgroundColor: '#0D9488' },
-  sender: { fontSize: 11, fontWeight: '700', color: '#0D9488', marginBottom: 2 },
-  bubbleText: { fontSize: 15, color: '#0F172A' },
+  bubbleMine: { alignSelf: 'flex-end', backgroundColor: theme.accent },
+  sender: { fontSize: 11, fontWeight: '700', color: theme.accent, marginBottom: 2 },
+  bubbleText: { fontSize: 15, color: theme.ink },
   bubbleTextMine: { color: '#FFFFFF' },
-  at: { marginTop: 4, fontSize: 10, color: '#64748B' },
-  atMine: { color: '#CCFBF1', textAlign: 'right' },
+  at: { marginTop: 4, fontSize: 10, color: theme.muted },
+  atMine: { color: theme.accentSoft, textAlign: 'right' },
   composer: {
     flexDirection: 'row',
     gap: 8,
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: theme.border,
     backgroundColor: '#FFFFFF',
   },
   input: {
     flex: 1,
-    backgroundColor: '#F4F6F8',
+    backgroundColor: theme.bg,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 15,
-    color: '#0F172A',
+    color: theme.ink,
   },
   sendBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: theme.accent,
     borderRadius: 12,
     paddingHorizontal: 16,
     justifyContent: 'center',

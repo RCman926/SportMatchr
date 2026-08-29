@@ -242,7 +242,7 @@ export default function SolosScreen() {
             <Switch
               value={verifiedOnly}
               onValueChange={setVerifiedOnly}
-              trackColor={{ false: '#CBD5E1', true: theme.accent }}
+              trackColor={{ false: theme.border, true: theme.accent }}
               thumbColor={verifiedOnly ? theme.accent : '#FFFFFF'}
             />
           </View>
