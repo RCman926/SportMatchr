@@ -6,8 +6,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useLocationStore } from '../lib/locationStore';
 import { useAuthStore } from '../lib/authStore';
+import { useProfileStore } from '../lib/profileStore';
 import { useAppFonts } from '../lib/fonts';
 import { touchPresence } from '../lib/presence';
+import { fetchMyProfile } from '../lib/api';
 import { theme } from '../constants/theme';
 
 const queryClient = new QueryClient();
@@ -17,11 +19,22 @@ function Bootstrap() {
   const bootstrapAuth = useAuthStore((s) => s.bootstrap);
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const bootstrapped = useAuthStore((s) => s.bootstrapped);
+  const setGender = useProfileStore((s) => s.setGender);
 
   useEffect(() => {
     void refreshLocation();
     void bootstrapAuth();
   }, [refreshLocation, bootstrapAuth]);
+
+  // Hydrate self-reported gender from the profile so the women-only gate is
+  // correct even when a session is opened before the profile tab is visited.
+  useEffect(() => {
+    if (!bootstrapped || !userId) return;
+    void (async () => {
+      const me = await fetchMyProfile();
+      if (me?.gender) setGender(me.gender);
+    })();
+  }, [bootstrapped, userId, setGender]);
 
   // Heartbeat while the app is open — counts as “online”, not “looking”
   useEffect(() => {

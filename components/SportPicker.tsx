@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { theme } from '../constants/theme';
 import {
   View,
   Text,
@@ -127,7 +128,7 @@ export function SportPicker(props: Props) {
           <TextInput
             style={styles.search}
             placeholder="Search Ottawa sports…"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={theme.muted}
             value={query}
             onChangeText={setQuery}
             autoCorrect={false}
@@ -263,10 +264,10 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: theme.ink,
   },
   edit: {
-    color: '#0D9488',
+    color: theme.accent,
     fontWeight: '700',
     fontSize: 14,
   },
@@ -278,19 +279,19 @@ const styles = StyleSheet.create({
   },
   emptyChip: {
     borderWidth: 1,
-    borderColor: '#404040',
+    borderColor: theme.border,
     borderStyle: 'dashed',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 999,
   },
   emptyChipText: {
-    color: '#64748B',
+    color: theme.muted,
     fontWeight: '600',
   },
   modal: {
     flex: 1,
-    backgroundColor: '#F4F6F8',
+    backgroundColor: theme.bg,
     paddingTop: 56,
     paddingHorizontal: 16,
   },
@@ -303,10 +304,10 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
+    color: theme.ink,
   },
   done: {
-    color: '#0D9488',
+    color: theme.accent,
     fontWeight: '800',
     fontSize: 16,
   },
@@ -316,10 +317,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#0F172A',
+    color: theme.ink,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
   },
   seasonTabs: {
     flexDirection: 'row',
@@ -327,13 +328,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   seasonPill: {
-    backgroundColor: '#F4F6F8',
+    backgroundColor: theme.bg,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
   },
   seasonPillText: {
-    color: '#0D9488',
+    color: theme.accent,
     fontWeight: '800',
     fontSize: 11,
   },
@@ -341,7 +342,7 @@ const styles = StyleSheet.create({
   cat: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#64748B',
+    color: theme.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 8,
@@ -356,20 +357,20 @@ const styles = StyleSheet.create({
   chip: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 999,
   },
   chipOn: {
-    backgroundColor: '#0D9488',
-    borderColor: '#0D9488',
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 999,
   },
   chipText: {
-    color: '#334155',
+    color: theme.ink,
     fontWeight: '600',
     fontSize: 13,
   },
@@ -399,7 +400,7 @@ const styles = StyleSheet.create({
   filterChip: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
@@ -408,11 +409,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   filterChipOn: {
-    backgroundColor: '#0D9488',
-    borderColor: '#0D9488',
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
   },
   filterText: {
-    color: '#334155',
+    color: theme.ink,
     fontWeight: '600',
     fontSize: 13,
   },
@@ -422,7 +423,7 @@ const styles = StyleSheet.create({
   scrollHint: {
     marginTop: 4,
     fontSize: 11,
-    color: '#64748B',
+    color: theme.muted,
     fontWeight: '600',
   },
 });

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { theme } from '../constants/theme';
 import {
   View,
   Text,
@@ -11,18 +12,41 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SportPicker } from '../components/SportPicker';
+import { OptionChips } from '../components/OptionChips';
+import { DateTimeField } from '../components/DateTimeField';
 import { WEDGE } from '../constants/wedge';
 import { getSeasonalPopularSports } from '../constants/sports';
+import {
+  GENDER_PLAY_OPTIONS,
+  AGE_GROUP_OPTIONS,
+  SKILL_LEVEL_OPTIONS,
+  DEFAULT_GENDER_PLAY,
+  DEFAULT_AGE_GROUP,
+  DEFAULT_SKILL_LEVEL,
+  composeSessionDescription,
+} from '../constants/booking';
 import { createSession } from '../lib/api';
 import { useAuthStore } from '../lib/authStore';
 import { useLocationStore } from '../lib/locationStore';
 import { haversineKm } from '../lib/location';
 import { listFreePlaces } from '../lib/places';
 
+/** Default the first game to the next round hour, at least 1h out. */
+function defaultStartsAt(): Date {
+  const d = new Date();
+  d.setHours(d.getHours() + 1, 0, 0, 0);
+  return d;
+}
+
 export default function CreateSessionScreen() {
   const [sport, setSport] = useState<string | null>(getSeasonalPopularSports()[0] ?? 'Basketball');
   const [title, setTitle] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('8');
+  const [startsAt, setStartsAt] = useState<Date>(defaultStartsAt);
+  const [notes, setNotes] = useState('');
+  const [genderPlay, setGenderPlay] = useState(DEFAULT_GENDER_PLAY);
+  const [ageGroup, setAgeGroup] = useState(DEFAULT_AGE_GROUP);
+  const [skillLevel, setSkillLevel] = useState(DEFAULT_SKILL_LEVEL);
   const [recurring, setRecurring] = useState(true);
   const [recurringLabel, setRecurringLabel] = useState('Every Tue 7:00 PM');
   const [saving, setSaving] = useState(false);
@@ -67,16 +91,24 @@ export default function CreateSessionScreen() {
     }
     setSaving(true);
     const sessionTitle = title.trim() || `${sport} pickup`;
+    const base = recurring
+      ? `Recurring host session in ${WEDGE.pocketName}. Free public place only.`
+      : `Pickup in ${WEDGE.pocketName}. Free public place only.`;
+    const description = composeSessionDescription(base, {
+      genderPlay,
+      ageGroup,
+      skillLevel,
+      notes,
+    });
     const result = await createSession({
       sport,
       title: sessionTitle,
       location: location || 'Ottawa',
       courtId,
       maxPlayers: Number(maxPlayers) || 8,
+      startsAt: startsAt.toISOString(),
       recurring: recurring ? recurringLabel.trim() || 'Weekly' : undefined,
-      description: recurring
-        ? `Recurring host session in ${WEDGE.pocketName}. Free public place only.`
-        : `Pickup in ${WEDGE.pocketName}. Free public place only.`,
+      description,
     });
     setSaving(false);
     if (result.error || !result.id) {
@@ -90,10 +122,14 @@ export default function CreateSessionScreen() {
         sport,
         title: sessionTitle,
         location: location || 'Ottawa',
-        time: recurring ? recurringLabel : 'Today',
+        time: recurring ? recurringLabel : startsAt.toLocaleString(),
         players: '1',
         max: maxPlayers || '8',
         recurring: recurring ? recurringLabel : '',
+        genderPlay,
+        ageGroup,
+        skillLevel,
+        notes: notes.trim(),
       },
     });
   };
@@ -120,7 +156,7 @@ export default function CreateSessionScreen() {
       <TextInput
         style={styles.input}
         placeholder={`${sport ?? 'Activity'} open play`}
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={theme.muted}
         value={title}
         onChangeText={setTitle}
       />
@@ -149,6 +185,41 @@ export default function CreateSessionScreen() {
         })}
       </ScrollView>
 
+      <DateTimeField label="Date & time" value={startsAt} onChange={setStartsAt} />
+
+      <OptionChips
+        label="Who can join"
+        options={GENDER_PLAY_OPTIONS}
+        selected={genderPlay}
+        onChange={setGenderPlay}
+      />
+
+      <OptionChips
+        label="Age group"
+        options={AGE_GROUP_OPTIONS}
+        selected={ageGroup}
+        onChange={setAgeGroup}
+      />
+
+      <OptionChips
+        label="Level of expertise"
+        options={SKILL_LEVEL_OPTIONS}
+        selected={skillLevel}
+        onChange={setSkillLevel}
+      />
+
+      <Text style={styles.label}>Notes</Text>
+      <TextInput
+        style={[styles.input, styles.notes]}
+        placeholder="Anything to add? Bring water, paddles to share, parking tips…"
+        placeholderTextColor={theme.muted}
+        value={notes}
+        onChangeText={setNotes}
+        multiline
+        numberOfLines={3}
+        textAlignVertical="top"
+      />
+
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
           <Text style={styles.label}>Recurring weekly</Text>
@@ -157,8 +228,8 @@ export default function CreateSessionScreen() {
         <Switch
           value={recurring}
           onValueChange={setRecurring}
-          trackColor={{ false: '#CBD5E1', true: '#0D9488' }}
-          thumbColor={recurring ? '#0D9488' : '#FFFFFF'}
+          trackColor={{ false: theme.border, true: theme.accent }}
+          thumbColor={recurring ? theme.accent : '#FFFFFF'}
         />
       </View>
 
@@ -170,7 +241,7 @@ export default function CreateSessionScreen() {
             value={recurringLabel}
             onChangeText={setRecurringLabel}
             placeholder="Every Tue 7:00 PM"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={theme.muted}
           />
         </>
       ) : null}
@@ -198,26 +269,26 @@ export default function CreateSessionScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F4F6F8' },
+  screen: { flex: 1, backgroundColor: theme.bg },
   container: { padding: 16, paddingBottom: 40 },
   exitBar: {
-    backgroundColor: '#F4F6F8',
+    backgroundColor: theme.bg,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
     marginBottom: 14,
   },
-  exitText: { color: '#0F172A', fontWeight: '800', fontSize: 14 },
-  header: { fontSize: 28, fontWeight: '800', color: '#0F172A' },
-  sub: { color: '#64748B', marginBottom: 20, marginTop: 4, lineHeight: 20 },
+  exitText: { color: theme.ink, fontWeight: '800', fontSize: 14 },
+  header: { fontSize: 28, fontWeight: '800', color: theme.ink },
+  sub: { color: theme.muted, marginBottom: 20, marginTop: 4, lineHeight: 20 },
   label: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#64748B',
+    color: theme.muted,
     marginBottom: 8,
     marginTop: 4,
   },
-  hint: { color: '#64748B', fontSize: 12 },
+  hint: { color: theme.muted, fontSize: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -231,27 +302,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#0F172A',
+    color: theme.ink,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
   },
+  notes: { minHeight: 84, paddingTop: 12 },
   courtRow: { gap: 8, paddingBottom: 14 },
   courtChip: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     maxWidth: 200,
   },
-  courtChipOn: { backgroundColor: '#CCFBF1', borderColor: '#0D9488' },
-  courtText: { color: '#334155', fontWeight: '600', fontSize: 13 },
-  courtTextOn: { color: '#14B8A6' },
+  courtChipOn: { backgroundColor: theme.accentSoft, borderColor: theme.accent },
+  courtText: { color: theme.ink, fontWeight: '600', fontSize: 13 },
+  courtTextOn: { color: theme.accentBright },
   createBtn: {
     marginTop: 12,
-    backgroundColor: '#0D9488',
+    backgroundColor: theme.accent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',

@@ -11,6 +11,7 @@ import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { PlayerProfile, SAFETY_TIPS } from '../../constants/mockData';
 import { VerifiedBadge } from '../../components/VerifiedBadge';
 import { ProfileAvatar } from '../../components/ProfileAvatar';
+import { ReportSheet } from '../../components/ReportSheet';
 import { fetchProfileById, trustLabel } from '../../lib/api';
 import { theme } from '../../constants/theme';
 
@@ -18,6 +19,7 @@ export default function PublicProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -139,7 +141,23 @@ export default function PublicProfileScreen() {
             · {tip}
           </Text>
         ))}
+
+        <TouchableOpacity
+          style={styles.reportBtn}
+          onPress={() => setShowReport(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.reportText}>Report {profile.name}</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      <ReportSheet
+        visible={showReport}
+        targetType="player"
+        targetId={profile.id}
+        targetLabel={profile.name}
+        onClose={() => setShowReport(false)}
+      />
     </>
   );
 }
@@ -214,4 +232,14 @@ const styles = StyleSheet.create({
   chipText: { color: theme.accentDark, fontWeight: '700', fontSize: 13 },
   court: { color: theme.muted, marginBottom: 4, lineHeight: 20 },
   tip: { color: theme.muted, marginBottom: 6, lineHeight: 20 },
+  reportBtn: {
+    marginTop: 20,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: theme.danger,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  reportText: { color: theme.danger, fontFamily: theme.fonts.bodyBold, fontSize: 13 },
 });

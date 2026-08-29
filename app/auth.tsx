@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { theme } from '../constants/theme';
 import {
   View,
   Text,
@@ -17,8 +18,12 @@ import {
   seedFounderSessions,
   signInWithPassword,
   signUpWithPassword,
+  updateMyProfile,
 } from '../lib/api';
 import { useAuthStore } from '../lib/authStore';
+import { useProfileStore } from '../lib/profileStore';
+import { OptionChips } from '../components/OptionChips';
+import { GENDER_IDENTITY_OPTIONS, DEFAULT_GENDER_IDENTITY } from '../constants/booking';
 import { WEDGE } from '../constants/wedge';
 
 function notify(title: string, message?: string) {
@@ -33,8 +38,10 @@ function notify(title: string, message?: string) {
 export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [gender, setGenderLocal] = useState(DEFAULT_GENDER_IDENTITY);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const setGender = useProfileStore((s) => s.setGender);
   const mode = backendMode();
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
   const user = useAuthStore((s) => s.user);
@@ -88,6 +95,8 @@ export default function AuthScreen() {
       return;
     }
     if (data.user && data.session) {
+      setGender(gender);
+      await updateMyProfile({ gender });
       await finishSignedIn(data.user.id, data.user.email);
       return;
     }
@@ -189,7 +198,7 @@ export default function AuthScreen() {
         autoCorrect={false}
         keyboardType="email-address"
         placeholder="you@email.com"
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={theme.muted}
         value={email}
         onChangeText={setEmail}
       />
@@ -200,10 +209,20 @@ export default function AuthScreen() {
         autoCapitalize="none"
         secureTextEntry
         placeholder="At least 6 characters"
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={theme.muted}
         value={password}
         onChangeText={setPassword}
       />
+
+      <View style={styles.genderBlock}>
+        <OptionChips
+          label="Gender (optional — for new accounts)"
+          hint="Only used to power women-only games. Pick “Prefer not to say” to skip."
+          options={GENDER_IDENTITY_OPTIONS}
+          selected={gender}
+          onChange={setGenderLocal}
+        />
+      </View>
 
       <TouchableOpacity style={styles.btn} onPress={onSignIn} activeOpacity={0.85} disabled={loading}>
         {loading ? (
@@ -234,7 +253,7 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F8' },
+  container: { flex: 1, backgroundColor: theme.bg },
   pad: { padding: 16, paddingBottom: 40 },
   exit: {
     backgroundColor: '#FFFFFF',
@@ -243,26 +262,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
   },
-  exitText: { color: '#0F172A', fontWeight: '800' },
-  header: { fontSize: 28, fontWeight: '800', color: '#0F172A' },
-  sub: { color: '#64748B', marginTop: 6, marginBottom: 16, lineHeight: 20 },
+  exitText: { color: theme.ink, fontWeight: '800' },
+  header: { fontSize: 28, fontWeight: '800', color: theme.ink },
+  sub: { color: theme.muted, marginTop: 6, marginBottom: 16, lineHeight: 20 },
   mode: { color: '#2F6B3A', fontWeight: '700', fontSize: 12, marginBottom: 20 },
-  modeWarn: { color: '#7A5A1E', fontWeight: '600', fontSize: 13, marginBottom: 16, lineHeight: 18 },
-  label: { color: '#64748B', fontWeight: '700', marginBottom: 8 },
+  modeWarn: { color: theme.warnFg, fontWeight: '600', fontSize: 13, marginBottom: 16, lineHeight: 18 },
+  label: { color: theme.muted, fontWeight: '700', marginBottom: 8 },
+  genderBlock: { marginBottom: 8 },
   input: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#0F172A',
+    color: theme.ink,
     marginBottom: 16,
   },
   btn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: theme.accent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -270,15 +290,15 @@ const styles = StyleSheet.create({
   btnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
   secondary: {
     marginTop: 12,
-    backgroundColor: '#CCFBF1',
+    backgroundColor: theme.accentSoft,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  secondaryText: { color: '#0F766E', fontWeight: '800' },
+  secondaryText: { color: theme.accentDark, fontWeight: '800' },
   danger: { marginTop: 20, alignItems: 'center', padding: 12 },
-  dangerText: { color: '#EF4444', fontWeight: '700' },
-  hint: { color: '#64748B', marginTop: 16, lineHeight: 18, fontSize: 13 },
+  dangerText: { color: theme.danger, fontWeight: '700' },
+  hint: { color: theme.muted, marginTop: 16, lineHeight: 18, fontSize: 13 },
   statusBox: {
     marginTop: 16,
     marginBottom: 8,
@@ -286,7 +306,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
   },
-  statusOk: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+  statusOk: { backgroundColor: theme.successSoft, borderColor: theme.accentBright },
   statusErr: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
-  statusText: { color: '#0F172A', lineHeight: 20, fontSize: 14, fontWeight: '600' },
+  statusText: { color: theme.ink, lineHeight: 20, fontSize: 14, fontWeight: '600' },
 });
