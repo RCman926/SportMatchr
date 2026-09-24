@@ -13,6 +13,7 @@ import { VerifiedBadge } from '../../components/VerifiedBadge';
 import { ProfileAvatar } from '../../components/ProfileAvatar';
 import { fetchProfileById, trustLabel } from '../../lib/api';
 import { theme } from '../../constants/theme';
+import { RecordCard } from '../../components/RecordCard';
 
 export default function PublicProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -108,6 +109,8 @@ export default function PublicProfileScreen() {
         </View>
 
         <Text style={styles.trust}>{trustLabel(profile)}</Text>
+
+        <RecordCard profile={profile} />
 
         {profile.lookingNow && (
           <View style={styles.live}>

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,12 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { shareLookingBlurb } from '../../lib/share';
+import { goToAuth } from '../../lib/pendingAuth';
+import { ensureNotifyPermission } from '../../lib/notify';
 import { PROFILES, SoloPlayer } from '../../constants/mockData';
 import { WEDGE } from '../../constants/wedge';
 import { VerifiedBadge } from '../../components/VerifiedBadge';
@@ -25,6 +29,7 @@ import {
   listSolos,
   LiveSession,
   OnlinePerson,
+  startMeetupWithLooking,
   stopLiveSolo,
 } from '../../lib/api';
 import { useLocationStore } from '../../lib/locationStore';
@@ -33,8 +38,12 @@ import { formatDistanceKm, haversineKm, courtCoords } from '../../lib/location';
 import { theme } from '../../constants/theme';
 import { ensureFacePhotoForMeetup } from '../../lib/profilePhoto';
 import { getSeasonalPopularSports } from '../../constants/sports';
+import { HangoutChat } from '../../components/HangoutChat';
+import { SessionWhoTags } from '../../components/SessionWhoTags';
+import { PageHero, SportBox, SportScene } from '../../components/SportScene';
+import { PressScale, FadeUp } from '../../components/motion';
 
-type ViewKey = 'online' | 'looking' | 'games';
+type ViewKey = 'hangout' | 'looking' | 'games' | 'online';
 
 type PendingAction = {
   id: string;
@@ -45,14 +54,27 @@ type PendingAction = {
 } | null;
 
 const VIEWS: { key: ViewKey; label: string }[] = [
-  { key: 'online', label: 'Online' },
+  { key: 'hangout', label: 'Hangout' },
   { key: 'looking', label: 'Looking' },
   { key: 'games', label: 'Games' },
+  { key: 'online', label: 'Online' },
 ];
 
+function parseView(v?: string): ViewKey | null {
+  if (v === 'hangout' || v === 'looking' || v === 'games' || v === 'online') return v;
+  return null;
+}
+
 export default function SolosScreen() {
-  const [view, setView] = useState<ViewKey>('online');
+  const params = useLocalSearchParams<{ view?: string }>();
+  const initialView: ViewKey = parseView(params.view) ?? 'hangout';
+  const [view, setView] = useState<ViewKey>(initialView);
   const [imLive, setImLive] = useState(false);
+
+  useEffect(() => {
+    const next = parseView(params.view);
+    if (next) setView(next);
+  }, [params.view]);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sportFilter, setSportFilter] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingAction>(null);
@@ -75,9 +97,9 @@ export default function SolosScreen() {
 
   const load = useCallback(async () => {
     const [solos, online, games] = await Promise.all([
-      listSolos(sportFilter, { live: isSignedIn }),
+      listSolos(sportFilter),
       listOnlinePeople(),
-      listSessions(sportFilter, { live: isSignedIn }),
+      listSessions(sportFilter),
     ]);
     setPlayersRaw(solos.players);
     setOnlinePeople(online.people);
@@ -91,6 +113,9 @@ export default function SolosScreen() {
     if (isSignedIn) {
       const me = await fetchMyProfile();
       setAvatarUrl(me?.avatarUrl ?? null);
+      setImLive(Boolean(me?.lookingNow));
+    } else {
+      setImLive(false);
     }
     setLoading(false);
   }, [sportFilter, isSignedIn]);
@@ -128,22 +153,53 @@ export default function SolosScreen() {
       .sort((a, b) => a.distanceKm - b.distanceKm);
   }, [sessions, coords]);
 
-  const counts = {
-    online: onlinePeople.length + visitorCount,
+  const counts: Record<ViewKey, number | string> = {
+    hangout: '·',
     looking: playersRaw.length,
     games: sessions.length,
+    online: onlinePeople.length + visitorCount,
   };
 
   const openChat = async (action: NonNullable<PendingAction>) => {
-    if (canAct) {
-      const ok = await ensureFacePhotoForMeetup({ remoteAvatarUrl: avatarUrl });
-      if (!ok) return;
+    if (!canAct) {
+      goToAuth({ kind: 'looking' });
+      return;
     }
+    const ok = await ensureFacePhotoForMeetup({ remoteAvatarUrl: avatarUrl });
+    if (!ok) return;
     setPending(null);
+
+    if (!isSignedIn) {
+      // Founder preview click-through
+      router.push({
+        pathname: '/session/[id]',
+        params: {
+          id: `mock-meetup-${action.id}`,
+          sport: action.sport,
+          title: action.title,
+          location: action.location,
+          time: action.time,
+          players: '2',
+          max: '4',
+        },
+      });
+      return;
+    }
+
+    const meetup = await startMeetupWithLooking({
+      otherUserId: action.id,
+      sport: action.sport,
+      title: action.title,
+      location: action.location,
+    });
+    if (meetup.error || !meetup.id) {
+      Alert.alert('Could not start chat', meetup.error ?? 'Try again');
+      return;
+    }
     router.push({
       pathname: '/session/[id]',
       params: {
-        id: `solo-${action.id}`,
+        id: meetup.id,
         sport: action.sport,
         title: action.title,
         location: action.location,
@@ -155,59 +211,93 @@ export default function SolosScreen() {
   };
 
   const subCopy =
-    view === 'online'
-      ? 'Who’s sitting in the app right now — not necessarily looking for a game.'
-      : view === 'looking'
-        ? `People around ${WEDGE.pocketName} who said they’re free.`
-        : 'Open pickup sessions you can join.';
+    view === 'hangout'
+      ? 'Open chat — sport, place, or just company. Plans can form here.'
+      : view === 'online'
+        ? 'Who’s in the app nearby.'
+        : view === 'looking'
+          ? 'Free right now — message them.'
+          : 'Open games you can join tonight.';
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Right now</Text>
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await load();
+              setRefreshing(false);
+            }}
+          />
+        }
+      >
+      <PageHero
+        sport={sportFilter}
+        caption={
+          view === 'hangout'
+            ? 'Hangout · Ottawa'
+            : view === 'looking'
+              ? 'Ready now'
+              : view === 'games'
+                ? 'Open games tonight'
+                : 'Who’s online'
+        }
+      />
       <Text style={styles.sub}>{subCopy}</Text>
 
       <View style={styles.seg}>
         {VIEWS.map((v) => {
           const on = view === v.key;
           return (
-            <TouchableOpacity
+            <PressScale
               key={v.key}
               style={[styles.segBtn, on && styles.segBtnOn]}
               onPress={() => setView(v.key)}
-              activeOpacity={0.85}
+              accessibilityLabel={v.label}
             >
               <Text style={[styles.segLabel, on && styles.segLabelOn]}>{v.label}</Text>
               <Text style={[styles.segCount, on && styles.segCountOn]}>{counts[v.key]}</Text>
-            </TouchableOpacity>
+            </PressScale>
           );
         })}
       </View>
 
-      <View style={styles.locBar}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.locLabel}>
-            {locSource === 'gps' ? 'Near' : 'Around'}
-          </Text>
-          <Text style={styles.locValue}>{area}</Text>
+      {view !== 'hangout' ? (
+        <View style={styles.locBar}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.locLabel}>
+              {locSource === 'gps' ? 'Near' : locSource === 'manual' ? 'Your area' : 'Around'}
+            </Text>
+            <Text style={styles.locValue}>{area}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.locBtn}
+            onPress={() => void refreshLoc({ forcePrompt: true })}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.locBtnText}>Refresh</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.locBtn}
-          onPress={() => void refreshLoc()}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.locBtnText}>Refresh</Text>
-        </TouchableOpacity>
-      </View>
+      ) : null}
+
+      {view === 'hangout' ? <HangoutChat area={area} /> : null}
 
       {view === 'looking' ? (
         <>
           <SportFilterBar selected={sportFilter} onChange={setSportFilter} />
-          <TouchableOpacity
+          <PressScale
             style={[styles.liveBtn, imLive && styles.liveBtnOn]}
-            activeOpacity={0.85}
+            accessibilityLabel={imLive ? 'Stop showing as ready' : 'I’m ready'}
             onPress={async () => {
               if (!canAct) {
-                router.push('/auth');
+                goToAuth({ kind: 'looking' });
                 return;
               }
               const okPhoto = await ensureFacePhotoForMeetup({ remoteAvatarUrl: avatarUrl });
@@ -223,7 +313,15 @@ export default function SolosScreen() {
                   return;
                 }
                 setImLive(true);
+                await ensureNotifyPermission({ force: true });
                 await load();
+                const share = await shareLookingBlurb();
+                if (share === 'copied') {
+                  const tip =
+                    'You’re live. Invite text copied — paste it to a friend so they know you’re free.';
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(tip);
+                  else Alert.alert('You’re live', tip);
+                }
               } else {
                 await stopLiveSolo();
                 setImLive(false);
@@ -232,19 +330,37 @@ export default function SolosScreen() {
             }}
           >
             <Text style={[styles.liveBtnText, imLive && styles.liveBtnTextOn]}>
-              {imLive ? `You’re looking near ${area}` : 'I’m free — show me on Looking'}
+              {imLive ? `You’re ready near ${area}` : 'I’m ready — show me on Looking'}
             </Text>
-          </TouchableOpacity>
+          </PressScale>
+          {imLive ? (
+            <TouchableOpacity
+              style={styles.shareLiveBtn}
+              activeOpacity={0.85}
+              onPress={async () => {
+                const share = await shareLookingBlurb();
+                if (share === 'copied') {
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    window.alert('Copied — paste it in WhatsApp or Texts.');
+                  } else {
+                    Alert.alert('Copied', 'Paste it in WhatsApp or Texts.');
+                  }
+                }
+              }}
+            >
+              <Text style={styles.shareLiveText}>Text a friend you’re free</Text>
+            </TouchableOpacity>
+          ) : null}
           <View style={styles.filterRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.filterLabel}>Verified only</Text>
-              <Text style={styles.filterHint}>Optional until the feed is full</Text>
+              <Text style={styles.filterHint}>Keep off while the feed is growing</Text>
             </View>
             <Switch
               value={verifiedOnly}
               onValueChange={setVerifiedOnly}
-              trackColor={{ false: '#CBD5E1', true: theme.accent }}
-              thumbColor={verifiedOnly ? theme.accent : '#FFFFFF'}
+              trackColor={{ false: '#CBD5E1', true: theme.ball }}
+              thumbColor={verifiedOnly ? theme.ball : '#FFFFFF'}
             />
           </View>
         </>
@@ -254,34 +370,18 @@ export default function SolosScreen() {
         <SportFilterBar selected={sportFilter} onChange={setSportFilter} />
       ) : null}
 
-      {loading ? (
-        <ActivityIndicator color={theme.accent} style={{ marginTop: 20 }} />
-      ) : (
-        <ScrollView
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={async () => {
-                setRefreshing(true);
-                await load();
-                setRefreshing(false);
-              }}
-            />
-          }
-        >
+      {view !== 'hangout' && loading ? (
+        <ActivityIndicator color={theme.accent} style={{ marginTop: 20, marginBottom: 40 }} />
+      ) : view !== 'hangout' ? (
+        <>
           {view === 'online' ? (
             <>
-              {source === 'demo' ? (
-                <Text style={styles.empty}>Sample online list — live once presence connects.</Text>
-              ) : null}
               {onlinePeople.length === 0 && visitorCount === 0 ? (
-                <Text style={styles.empty}>Quiet — you’re the only one here right now.</Text>
+                <Text style={styles.empty}>Quiet here — tap I’m ready so someone nearby can find you tonight.</Text>
               ) : null}
               {onlinePeople.map((p) => (
+                <FadeUp key={p.id} delay={30}>
                 <TouchableOpacity
-                  key={p.id}
                   style={styles.card}
                   activeOpacity={0.85}
                   onPress={() => router.push(`/profile/${p.id}`)}
@@ -307,6 +407,7 @@ export default function SolosScreen() {
                     </View>
                   </View>
                 </TouchableOpacity>
+                </FadeUp>
               ))}
               {visitorCount > 0 ? (
                 <View style={styles.card}>
@@ -327,13 +428,17 @@ export default function SolosScreen() {
             <>
               {players.length === 0 ? (
                 <Text style={styles.empty}>
-                  Nobody’s looking yet. Tap I’m free if you want a game.
+                  Nobody’s ready yet. Tap I’m ready if you want a game tonight.
                 </Text>
               ) : null}
               {players.map((p) => {
-                const avatarUrl = PROFILES[p.profileId]?.avatarUrl;
+                const avatarUrl = p.avatarUrl ?? PROFILES[p.profileId]?.avatarUrl;
                 return (
-                  <View key={p.id} style={styles.card}>
+                  <FadeUp key={p.id} delay={40}>
+                  <View style={styles.card}>
+                    <View style={styles.sceneBleed}>
+                      <SportScene sport={p.sport} height={96} />
+                    </View>
                     <TouchableOpacity
                       style={styles.cardHeader}
                       activeOpacity={0.85}
@@ -346,7 +451,7 @@ export default function SolosScreen() {
                           <VerifiedBadge level={p.verification} compact />
                         </View>
                         <Text style={styles.meta}>
-                          {p.neighbourhood} · {formatDistanceKm(p.distanceKm)} · {p.sport}
+                          {p.neighbourhood} · {formatDistanceKm(p.distanceKm)}
                         </Text>
                       </View>
                       <View style={[styles.badge, styles.badgeHot]}>
@@ -387,6 +492,7 @@ export default function SolosScreen() {
                       </TouchableOpacity>
                     </View>
                   </View>
+                  </FadeUp>
                 );
               })}
             </>
@@ -397,40 +503,50 @@ export default function SolosScreen() {
               {rankedGames.length === 0 ? (
                 <Text style={styles.empty}>
                   No open games yet.{' '}
-                  <Text style={styles.link} onPress={() => router.push('/create')}>
-                    Host one
+                  <Text
+                    style={styles.link}
+                    onPress={() => router.push({ pathname: '/create', params: { when: 'tonight' } })}
+                  >
+                    Host tonight
                   </Text>
                 </Text>
               ) : null}
               {rankedGames.map((s) => (
                 <TouchableOpacity
                   key={s.id}
-                  style={styles.card}
                   activeOpacity={0.85}
                   onPress={() =>
                     router.push({ pathname: '/session/[id]', params: { id: s.id } })
                   }
                 >
-                  <View style={styles.cardHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.sportTag}>{s.sport}</Text>
-                      <Text style={styles.name}>{s.title}</Text>
-                      <Text style={styles.meta}>
-                        {s.time} · {s.location} · {formatDistanceKm(s.distanceKm)}
-                      </Text>
+                  <SportBox sport={s.sport}>
+                    <View style={styles.cardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.name}>{s.title}</Text>
+                        <Text style={styles.meta}>
+                          {s.time} · {s.location} · {formatDistanceKm(s.distanceKm)}
+                        </Text>
+                        <SessionWhoTags
+                          playMix={s.playMix}
+                          ageGroup={s.ageGroup}
+                          skillLevel={s.skillLevel}
+                        />
+                      </View>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>
+                          {s.players}/{s.max}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>
-                        {s.players}/{s.max}
-                      </Text>
-                    </View>
-                  </View>
+                  </SportBox>
                 </TouchableOpacity>
               ))}
             </>
           ) : null}
-        </ScrollView>
-      )}
+        </>
+      ) : null}
+      <View style={{ height: 28 }} />
+      </ScrollView>
 
       <SafetyGate
         visible={!!pending}
@@ -443,7 +559,9 @@ export default function SolosScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.bg, padding: 16 },
+  screen: { flex: 1, backgroundColor: theme.bg },
+  scroll: { flex: 1 },
+  container: { padding: 16, paddingBottom: 28, flexGrow: 1 },
   header: {
     fontFamily: theme.fonts.displayBold,
     fontSize: 34,
@@ -460,40 +578,43 @@ const styles = StyleSheet.create({
   },
   seg: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 14,
   },
   segBtn: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '22%',
+    minWidth: 72,
     borderWidth: 1,
     borderColor: theme.border,
     backgroundColor: theme.surface,
     borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
     alignItems: 'center',
   },
   segBtnOn: {
-    borderColor: theme.accent,
-    backgroundColor: theme.accentSoft,
+    borderColor: theme.accentDark,
+    backgroundColor: theme.accent,
   },
   segLabel: {
     fontFamily: theme.fonts.bodyMed,
     color: theme.muted,
-    fontSize: 13,
+    fontSize: 12,
   },
   segLabelOn: {
-    color: theme.accentDark,
+    color: theme.surfaceRaised,
     fontFamily: theme.fonts.bodyBold,
   },
   segCount: {
     fontFamily: theme.fonts.display,
-    fontSize: 20,
+    fontSize: 18,
     color: theme.ink,
     marginTop: 2,
   },
   segCountOn: {
-    color: theme.accentDark,
+    color: theme.surfaceRaised,
   },
   locBar: {
     flexDirection: 'row',
@@ -532,9 +653,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surface,
     borderWidth: 2,
     borderColor: theme.accent,
+    minHeight: 52,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 12,
   },
   liveBtnOn: { backgroundColor: theme.ball },
@@ -546,6 +669,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   liveBtnTextOn: { color: '#FFFFFF' },
+  shareLiveBtn: {
+    marginTop: -4,
+    marginBottom: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  shareLiveText: {
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 14,
+    color: theme.ballDark,
+    textDecorationLine: 'underline',
+  },
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -569,11 +704,17 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: theme.surface,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: theme.border,
+    overflow: 'hidden',
+  },
+  sceneBleed: {
+    marginHorizontal: -16,
+    marginTop: -16,
+    marginBottom: 12,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },

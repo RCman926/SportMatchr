@@ -1,4 +1,5 @@
 import { Image, View, Text, StyleSheet } from 'react-native';
+import { theme } from '../constants/theme';
 
 type Props = {
   name: string;
@@ -17,7 +18,14 @@ export function ProfileAvatar({ name, uri, size = 88, showPhotoHint = false }: P
       {uri ? (
         <Image
           source={{ uri }}
-          style={{ width: size, height: size, borderRadius: radius, backgroundColor: '#E2E8F0' }}
+          style={{
+            width: size,
+            height: size,
+            borderRadius: radius,
+            backgroundColor: theme.accentSoft,
+            borderWidth: 2,
+            borderColor: theme.accent,
+          }}
           accessibilityLabel={`${name} profile photo`}
         />
       ) : (
@@ -45,13 +53,13 @@ export function ProfileAvatar({ name, uri, size = 88, showPhotoHint = false }: P
 
 const styles = StyleSheet.create({
   fallback: {
-    backgroundColor: '#0D9488',
+    backgroundColor: theme.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   initial: {
     color: '#FFFFFF',
-    fontWeight: '800',
+    fontFamily: theme.fonts.bodyBold,
   },
   missing: {
     position: 'absolute',

@@ -2,6 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from './authStore';
+import { uploadAvatar } from './api';
 
 const STORAGE_KEY = 'sportmatchr.profilePhotoUri';
 
@@ -97,17 +98,30 @@ export function profilePhotoPrompt() {
 }
 
 /**
- * Soft gate: must have a face photo (remote avatar or local save) before Join / Looking.
- * Returns true if OK to proceed.
+ * Face photo for Join / Looking.
+ * The remote upload matters: other players must be able to recognize the person.
  */
+export const REQUIRE_FACE_PHOTO_TO_PLAY = true;
+
+async function saveMeetupPhoto(uri: string): Promise<boolean> {
+  const remoteUrl = await uploadAvatar(uri);
+  if (remoteUrl) return true;
+  Alert.alert(
+    'Photo not saved',
+    'We couldn’t save your photo to your profile. Check your connection and try again.'
+  );
+  return false;
+}
+
+/** Returns true if OK to proceed. */
 export async function ensureFacePhotoForMeetup(opts?: {
   remoteAvatarUrl?: string | null;
 }): Promise<boolean> {
-  // Founder preview — skip gate while exploring the product
+  if (!REQUIRE_FACE_PHOTO_TO_PLAY) return true;
   if (useAuthStore.getState().isFounderPreview) return true;
   if (opts?.remoteAvatarUrl) return true;
   const local = await loadSavedProfilePhoto();
-  if (local) return true;
+  if (local) return saveMeetupPhoto(local);
 
   const message =
     'Add a real face photo so people can recognize you at the public place. No logos or group shots.';
@@ -116,7 +130,7 @@ export async function ensureFacePhotoForMeetup(opts?: {
     const ok = window.confirm(`${message}\n\nAdd a photo now?`);
     if (!ok) return false;
     const uri = await pickProfilePhoto('library');
-    return Boolean(uri);
+    return uri ? saveMeetupPhoto(uri) : false;
   }
 
   return new Promise((resolve) => {
@@ -125,7 +139,9 @@ export async function ensureFacePhotoForMeetup(opts?: {
       {
         text: 'Add photo',
         onPress: () => {
-          void profilePhotoPrompt().then((uri) => resolve(Boolean(uri)));
+          void profilePhotoPrompt().then(async (uri) => {
+            resolve(uri ? await saveMeetupPhoto(uri) : false);
+          });
         },
       },
     ]);

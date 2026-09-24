@@ -27,20 +27,82 @@ function computeCanAct(isSignedIn: boolean, isFounderPreview: boolean) {
   return isSignedIn || isFounderPreview;
 }
 
+/**
+ * Demo/mock board only for founder preview WITHOUT a real account.
+ * Friends on the public URL always see the live product (empty until people join).
+ */
+export function shouldUseDemoData(): boolean {
+  const { isFounderPreview, isSignedIn } = useAuthStore.getState();
+  return isFounderPreview && !isSignedIn;
+}
+
+/**
+ * Founder/mock preview:
+ * - Web: only when ?founder=1 (or ?admin=1). Stored in sessionStorage so THIS TAB
+ *   keeps mock for the demo, but a fresh tab / friends on the clean URL always get live.
+ * - ?founder=0 / ?live=1 clears any leftover localStorage sticky flag from older builds.
+ */
 async function readFounderFlag(): Promise<boolean> {
   try {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const q = new URLSearchParams(window.location.search);
-      if (q.get('founder') === '1' || q.get('admin') === '1') {
-        await AsyncStorage.setItem(FOUNDER_KEY, '1');
-        // Clean query so refresh stays clean
+      const clear =
+        q.get('founder') === '0' || q.get('live') === '1' || q.get('founder') === 'false';
+      const enable = q.get('founder') === '1' || q.get('admin') === '1';
+
+      if (clear || enable) {
         q.delete('founder');
         q.delete('admin');
+        q.delete('live');
         const next = `${window.location.pathname}${q.toString() ? `?${q}` : ''}${window.location.hash}`;
         window.history.replaceState({}, document.title, next);
+      }
+
+      if (clear) {
+        try {
+          sessionStorage.removeItem(FOUNDER_KEY);
+          localStorage.removeItem(FOUNDER_KEY);
+        } catch {
+          /* ignore */
+        }
+        await AsyncStorage.removeItem(FOUNDER_KEY);
+        return false;
+      }
+
+      if (enable) {
+        try {
+          sessionStorage.setItem(FOUNDER_KEY, '1');
+        } catch {
+          /* ignore */
+        }
+        // Clear legacy sticky flag so /home without ?founder=1 never stays on mock forever
+        try {
+          localStorage.removeItem(FOUNDER_KEY);
+        } catch {
+          /* ignore */
+        }
+        await AsyncStorage.removeItem(FOUNDER_KEY);
         return true;
       }
+
+      // Tab-scoped only — never restore from AsyncStorage/localStorage on web
+      try {
+        if (sessionStorage.getItem(FOUNDER_KEY) === '1') return true;
+      } catch {
+        /* ignore */
+      }
+      // One-time migration: drop old sticky localStorage so shared URL is live
+      try {
+        if (localStorage.getItem(FOUNDER_KEY) === '1') {
+          localStorage.removeItem(FOUNDER_KEY);
+        }
+      } catch {
+        /* ignore */
+      }
+      await AsyncStorage.removeItem(FOUNDER_KEY);
+      return false;
     }
+
     return (await AsyncStorage.getItem(FOUNDER_KEY)) === '1';
   } catch {
     return false;
@@ -72,21 +134,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return;
     }
 
-    // Web magic-link: exchange tokens from URL hash/query
+    // Web: email confirm / magic-link / OAuth — exchange tokens from URL hash/query
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const href = window.location.href;
-      if (href.includes('access_token') || href.includes('type=magiclink') || href.includes('code=')) {
+      const hash = window.location.hash?.replace(/^#/, '') ?? '';
+      const query = window.location.search?.replace(/^\?/, '') ?? '';
+      const urlParams = new URLSearchParams(hash || query);
+      const authType = urlParams.get('type');
+      const isRecovery = authType === 'recovery';
+      const hasAuthCallback =
+        href.includes('access_token') ||
+        href.includes('refresh_token') ||
+        href.includes('type=magiclink') ||
+        href.includes('type=signup') ||
+        href.includes('type=email') ||
+        href.includes('type=recovery') ||
+        href.includes('code=');
+      if (hasAuthCallback) {
         try {
           await supabase.auth.exchangeCodeForSession(href).catch(async () => {
-            const hash = window.location.hash?.replace(/^#/, '') ?? '';
-            const params = new URLSearchParams(hash);
-            const access_token = params.get('access_token');
-            const refresh_token = params.get('refresh_token');
+            const access_token = urlParams.get('access_token');
+            const refresh_token = urlParams.get('refresh_token');
             if (access_token && refresh_token) {
               await supabase!.auth.setSession({ access_token, refresh_token });
             }
           });
-          window.history.replaceState({}, document.title, window.location.pathname);
+          const path = (window.location.pathname || '/auth').split('?')[0];
+          const next = isRecovery ? `${path}?recovery=1` : path;
+          window.history.replaceState({}, document.title, next);
         } catch {
           /* continue with getSession */
         }
@@ -95,6 +170,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const { data } = await supabase.auth.getSession();
     const signedIn = Boolean(data.session?.user);
+    // Keep founder flag across sign-in for ops UI (seed). Demo data still off when signed in
+    // via shouldUseDemoData() = founder && !signedIn.
     set({
       session: data.session,
       user: data.session?.user ?? null,
@@ -107,19 +184,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     supabase.auth.onAuthStateChange((_event, session) => {
       const nextSignedIn = Boolean(session?.user);
-      const preview = get().isFounderPreview;
       set({
         session,
         user: session?.user ?? null,
         isSignedIn: nextSignedIn,
-        canAct: computeCanAct(nextSignedIn, preview),
+        isFounderPreview: get().isFounderPreview,
+        canAct: computeCanAct(nextSignedIn, get().isFounderPreview),
         loading: false,
       });
     });
   },
 
   enterFounderPreview: async () => {
-    await AsyncStorage.setItem(FOUNDER_KEY, '1');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(FOUNDER_KEY, '1');
+        localStorage.removeItem(FOUNDER_KEY);
+      } catch {
+        /* ignore */
+      }
+    } else {
+      await AsyncStorage.setItem(FOUNDER_KEY, '1');
+    }
     const signedIn = get().isSignedIn;
     set({
       isFounderPreview: true,
@@ -128,6 +214,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   exitFounderPreview: async () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem(FOUNDER_KEY);
+        localStorage.removeItem(FOUNDER_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
     await AsyncStorage.removeItem(FOUNDER_KEY);
     const signedIn = get().isSignedIn;
     set({

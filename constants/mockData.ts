@@ -1,4 +1,5 @@
 import { WEDGE } from './wedge';
+import type { ResultLogEntry } from '../lib/record';
 
 export type VerificationLevel = 'none' | 'phone' | 'photo' | 'id';
 
@@ -26,6 +27,11 @@ export type PlayerProfile = {
   /** People who said they'd play with them again */
   rematchYes?: number;
   rematchTotal?: number;
+  /** Optional self-reported record — not a ranking */
+  wins?: number;
+  losses?: number;
+  draws?: number;
+  resultLog?: ResultLogEntry[];
 };
 
 export type MockSession = {
@@ -62,6 +68,7 @@ export type SoloPlayer = {
   verification: VerificationLevel;
   rating: number;
   gamesPlayed: number;
+  avatarUrl?: string;
 };
 
 export type ChatMessage = {
@@ -70,6 +77,8 @@ export type ChatMessage = {
   text: string;
   mine?: boolean;
   at: string;
+  avatarUrl?: string;
+  senderId?: string;
 };
 
 export const VERIFICATION_LABEL: Record<VerificationLevel, string> = {
@@ -108,6 +117,22 @@ export const MY_PROFILE: PlayerProfile = {
   noShows: 0,
   rematchYes: 8,
   rematchTotal: 9,
+  wins: 7,
+  losses: 3,
+  draws: 1,
+  resultLog: [
+    { result: 'win', sport: 'Basketball', at: '2026-07-28' },
+    { result: 'win', sport: 'Pickleball', at: '2026-07-22' },
+    { result: 'loss', sport: 'Basketball', at: '2026-07-18' },
+    { result: 'win', sport: 'Basketball', at: '2026-07-12' },
+    { result: 'draw', sport: 'Soccer', at: '2026-07-05' },
+    { result: 'win', sport: 'Pickleball', at: '2026-06-28' },
+    { result: 'loss', sport: 'Basketball', at: '2026-06-20' },
+    { result: 'win', sport: 'Basketball', at: '2026-06-14' },
+    { result: 'fun', sport: 'Outdoor Yoga', at: '2026-06-10' },
+    { result: 'win', sport: 'Basketball', at: '2026-06-02' },
+    { result: 'loss', sport: 'Pickleball', at: '2026-05-28' },
+  ],
 };
 
 export const PROFILES: Record<string, PlayerProfile> = {
@@ -157,6 +182,17 @@ export const PROFILES: Record<string, PlayerProfile> = {
     rematchTotal: 24,
     shows: 34,
     noShows: 1,
+    wins: 18,
+    losses: 9,
+    draws: 2,
+    resultLog: [
+      { result: 'win', sport: 'Pickleball', at: '2026-07-29' },
+      { result: 'win', sport: 'Pickleball', at: '2026-07-22' },
+      { result: 'loss', sport: 'Pickleball', at: '2026-07-15' },
+      { result: 'win', sport: 'Pickleball', at: '2026-07-08' },
+      { result: 'win', sport: 'Pickleball', at: '2026-07-01' },
+      { result: 'loss', sport: 'Pickleball', at: '2026-06-24' },
+    ],
   },
   alex: {
     id: 'alex',
@@ -397,7 +433,7 @@ export const SAFETY_TIPS = [
   'Only play with people who have a real face photo — recognize them at the court.',
   'Phone verify when you can. Tell a friend where you’re going before you leave.',
   'Chat in-app first — don’t share your home address.',
-  'If anything feels off, leave and report the user.',
+  'If anything feels off, leave and use Report in the session chat.',
 ];
 
 /** Seed targets for founder ops (see docs/SEED_PLAYBOOK.md) */

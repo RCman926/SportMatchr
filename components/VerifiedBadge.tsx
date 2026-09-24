@@ -3,6 +3,7 @@ import {
   VerificationLevel,
   VERIFICATION_LABEL,
 } from '../constants/mockData';
+import { theme } from '../constants/theme';
 
 const COLORS: Record<VerificationLevel, { bg: string; fg: string }> = {
   none: { bg: '#E2E8F0', fg: '#64748B' },
@@ -45,6 +46,6 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: theme.fonts.bodyBold,
   },
 });

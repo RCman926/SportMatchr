@@ -29,12 +29,14 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "^0.21.2",
+    "react-native-worklets": "0.10.1",
     "tailwindcss": "^3.4.19",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
   },
   "scripts": {
     "start": "expo start",
@@ -42,7 +44,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "prepare:pages": "node scripts/prepare-pages-dist.js",
-    "deploy:web": "expo export -p web && node scripts/prepare-pages-dist.js && wrangler pages deploy dist --project-name sportmatchr --commit-dirty=true"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test",
+    "deploy:web": "expo export -p web && node scripts/prepare-pages-dist.js && wrangler pages deploy dist --project-name sportmatchr --branch master --commit-dirty=true"
   },
   "private": true
 }

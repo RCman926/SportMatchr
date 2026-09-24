@@ -7,19 +7,35 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SportPicker } from '../components/SportPicker';
+import { PageHero } from '../components/SportScene';
+import { SessionAudienceFields } from '../components/SessionAudienceFields';
+import { DateField, TimeField } from '../components/DateTimeFields';
 import { getSeasonalPopularSports } from '../constants/sports';
 import { theme } from '../constants/theme';
-import { createSession } from '../lib/api';
+import { createSession, suggestPlace } from '../lib/api';
 import { useAuthStore } from '../lib/authStore';
 import { useLocationStore } from '../lib/locationStore';
 import { formatDistanceKm, haversineKm } from '../lib/location';
-import { listFreePlaces } from '../lib/places';
+import { listFreePlaces, listHostPlaces } from '../lib/places';
 import type { OttawaCourt } from '../constants/ottawaCourts';
+import {
+  combineLocalDateTime,
+  formatWhenLabel,
+  localYmd,
+  nextWeekendYmd,
+  shiftYmd,
+  type AgeGroup,
+  type PlayMix,
+  type SkillLevel,
+} from '../lib/sessionFilters';
+import { goToAuth } from '../lib/pendingAuth';
+import { shareSession } from '../lib/share';
 
-type WhenMode = 'asap' | 'day' | 'weekly';
+type WhenMode = 'date' | 'asap' | 'day' | 'weekly';
 type AreaFilter =
   | 'near'
   | 'kanata'
@@ -74,7 +90,15 @@ function matchesArea(c: OttawaCourt, area: AreaFilter): boolean {
   }
 }
 
-function whenLabel(mode: WhenMode, day: string, weekly: string, timeNote: string): string {
+function whenLabel(
+  mode: WhenMode,
+  day: string,
+  weekly: string,
+  timeNote: string,
+  gameDate: string,
+  gameTime: string
+): string {
+  if (mode === 'date') return formatWhenLabel(gameDate, gameTime);
   if (mode === 'asap') return timeNote.trim() || 'ASAP / today';
   if (mode === 'weekly') return weekly.trim() || 'Weekly';
   const dayLabel =
@@ -82,23 +106,59 @@ function whenLabel(mode: WhenMode, day: string, weekly: string, timeNote: string
   return timeNote.trim() ? `${dayLabel} · ${timeNote.trim()}` : dayLabel;
 }
 
+function computeStartsAt(
+  mode: WhenMode,
+  gameDate: string,
+  gameTime: string,
+  dayPreset: string
+): string {
+  if (mode === 'asap') return new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  if (mode === 'day') {
+    const ymd =
+      dayPreset === 'tomorrow'
+        ? shiftYmd(localYmd(), 1)
+        : dayPreset === 'weekend'
+          ? nextWeekendYmd()
+          : localYmd();
+    const hm = /^\d{1,2}:\d{2}/.test(gameTime) ? gameTime : '18:00';
+    return combineLocalDateTime(ymd, hm).toISOString();
+  }
+  return combineLocalDateTime(gameDate || localYmd(), gameTime || '18:00').toISOString();
+}
+
 export default function CreateSessionScreen() {
-  const [sport, setSport] = useState<string | null>(getSeasonalPopularSports()[0] ?? 'Basketball');
+  const params = useLocalSearchParams<{ courtId?: string; sport?: string; when?: string }>();
+  const startWhen = typeof params.when === 'string' ? params.when : 'tonight';
+  const [sport, setSport] = useState<string | null>(
+    (typeof params.sport === 'string' && params.sport) || getSeasonalPopularSports()[0] || 'Basketball'
+  );
   const [title, setTitle] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('8');
   const [area, setArea] = useState<AreaFilter>('near');
-  const [whenMode, setWhenMode] = useState<WhenMode>('asap');
+  const [whenMode, setWhenMode] = useState<WhenMode>(
+    startWhen === 'asap' ? 'asap' : startWhen === 'weekly' ? 'weekly' : startWhen === 'date' ? 'date' : 'day'
+  );
   const [dayPreset, setDayPreset] = useState<(typeof DAY_PRESETS)[number]['key']>('today');
-  const [timeNote, setTimeNote] = useState('After work');
+  const [gameDate, setGameDate] = useState(localYmd());
+  const [gameTime, setGameTime] = useState('18:00');
+  const [timeNote, setTimeNote] = useState('After work · 6:00 PM');
   const [weeklyLabel, setWeeklyLabel] = useState('Every Tue 7:00 PM');
+  const [notes, setNotes] = useState('');
+  const [playMix, setPlayMix] = useState<PlayMix>('mixed');
+  const [ageGroup, setAgeGroup] = useState<AgeGroup>('any');
+  const [skillLevel, setSkillLevel] = useState<SkillLevel>('any');
   const [saving, setSaving] = useState(false);
+  const [customPlace, setCustomPlace] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customHood, setCustomHood] = useState('');
+  const [customNotes, setCustomNotes] = useState('');
   const canAct = useAuthStore((s) => s.canAct);
   const coords = useLocationStore((s) => s.coords);
 
   const matchingCourts = useMemo(() => {
-    const freeFirst = listFreePlaces({ sport, seasonAware: true });
-    const fallback = listFreePlaces({ sport });
-    const pool = freeFirst.length ? freeFirst : fallback.length ? fallback : listFreePlaces();
+    const freeFirst = listHostPlaces({ sport, seasonAware: true });
+    const fallback = listHostPlaces({ sport });
+    const pool = freeFirst.length ? freeFirst : fallback.length ? fallback : listHostPlaces();
 
     const scoped =
       area === 'near' || area === 'all' ? pool : pool.filter((c) => matchesArea(c, area));
@@ -128,7 +188,7 @@ export default function CreateSessionScreen() {
         if (diverse.length >= 18) break;
       }
       // Always pin known high-demand parks if they match the sport
-      const pinIds = ['mooneys', 'britannia', 'kanata-lakes', 'kanata-recreation', 'katimavik-courts', 'lansdowne', 'brewer'];
+      const pinIds = ['mooneys', 'britannia', 'walter-baker', 'kanata-lakes', 'kanata-recreation', 'katimavik-courts', 'lansdowne', 'brewer'];
       for (const id of pinIds) {
         const hit = ranked.find((c) => c.id === id);
         if (hit && !diverse.some((d) => d.id === id)) diverse.push(hit);
@@ -140,45 +200,115 @@ export default function CreateSessionScreen() {
   }, [sport, coords, area]);
 
   const [location, setLocation] = useState(matchingCourts[0]?.name ?? '');
-  const [courtId, setCourtId] = useState(matchingCourts[0]?.id);
+  const [courtId, setCourtId] = useState<string | undefined>(
+    (typeof params.courtId === 'string' && params.courtId) || matchingCourts[0]?.id
+  );
 
   useEffect(() => {
+    const id = typeof params.courtId === 'string' ? params.courtId : '';
+    if (!id) return;
+    const hit = listFreePlaces().find((c) => c.id === id);
+    if (!hit) return;
+    setCourtId(hit.id);
+    setLocation(hit.name);
+    setCustomPlace(false);
+  }, [params.courtId]);
+
+  useEffect(() => {
+    if (customPlace) return;
     const next = matchingCourts[0];
     if (!next) return;
     if (!matchingCourts.some((c) => c.id === courtId)) {
+      const pinnedId = typeof params.courtId === 'string' ? params.courtId : '';
+      if (pinnedId && courtId === pinnedId) return;
       setLocation(next.name);
       setCourtId(next.id);
     }
-  }, [matchingCourts, courtId]);
+  }, [matchingCourts, courtId, customPlace]);
 
   const create = async () => {
     if (!canAct) {
-      router.push('/auth');
+      goToAuth({
+        kind: 'create',
+        courtId: customPlace ? undefined : courtId,
+        sport: sport ?? undefined,
+        when:
+          whenMode === 'asap'
+            ? 'asap'
+            : whenMode === 'weekly'
+              ? 'weekly'
+              : whenMode === 'date'
+                ? 'date'
+                : 'tonight',
+      });
       return;
     }
     if (!sport) {
       Alert.alert('Pick a sport', 'Choose what you want to play.');
       return;
     }
-    const when = whenLabel(whenMode, dayPreset, weeklyLabel, timeNote);
+    if (customPlace && !customName.trim()) {
+      Alert.alert('Name the place', 'Add the park / court name so people can find it.');
+      return;
+    }
+    const when = whenLabel(whenMode, dayPreset, weeklyLabel, timeNote, gameDate, gameTime);
+    const placeLabel = customPlace
+      ? [customName.trim(), customHood.trim()].filter(Boolean).join(' · ')
+      : location || 'Ottawa';
+    const description = [notes.trim(), customPlace ? customNotes.trim() : '']
+      .filter(Boolean)
+      .join('\n');
+
     setSaving(true);
-    const sessionTitle = title.trim() || `${sport} open play`;
+    if (customPlace) {
+      await suggestPlace({
+        name: customName.trim(),
+        neighbourhood: customHood.trim() || undefined,
+        notes: customNotes.trim() || 'Suggested while hosting a meetup',
+        sport,
+      });
+    }
+    const sessionTitle =
+      title.trim() ||
+      (whenMode === 'day' && dayPreset === 'today'
+        ? `${sport} tonight · ${placeLabel}`
+        : `${sport} · ${placeLabel}`);
     const result = await createSession({
       sport,
       title: sessionTitle,
-      location: location || 'Ottawa',
-      courtId,
+      location: placeLabel,
+      courtId: customPlace ? undefined : courtId,
       maxPlayers: Number(maxPlayers) || 8,
+      startsAt: computeStartsAt(whenMode, gameDate, gameTime, dayPreset),
       recurring: whenMode === 'weekly' ? weeklyLabel.trim() || 'Weekly' : undefined,
-      description:
-        whenMode === 'weekly'
-          ? `Recurring meetup · free public place · ${when}`
-          : `Pickup · ${when} · free public place only.`,
+      description,
+      playMix,
+      ageGroup,
+      skillLevel,
     });
     setSaving(false);
     if (result.error || !result.id) {
       Alert.alert('Could not create', result.error ?? 'Sign in and try again.');
       return;
+    }
+    try {
+      const { ensureNotifyPermission } = await import('../lib/notify');
+      await ensureNotifyPermission({ force: true });
+    } catch {
+      /* ignore */
+    }
+    if (Platform.OS === 'web') {
+      try {
+        await shareSession({
+          id: result.id,
+          sport,
+          title: sessionTitle,
+          location: placeLabel,
+          time: when,
+        });
+      } catch {
+        /* share is optional */
+      }
     }
     router.replace({
       pathname: '/session/[id]',
@@ -186,7 +316,7 @@ export default function CreateSessionScreen() {
         id: result.id,
         sport,
         title: sessionTitle,
-        location: location || 'Ottawa',
+        location: placeLabel,
         time: when,
         players: '1',
         max: maxPlayers || '8',
@@ -201,22 +331,27 @@ export default function CreateSessionScreen() {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+    <View style={styles.screen}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <TouchableOpacity style={styles.exitBar} onPress={goHome} activeOpacity={0.85}>
-        <Text style={styles.exitText}>← Back to Home</Text>
+        <Text style={styles.exitText}>← Back</Text>
       </TouchableOpacity>
 
-      <Text style={styles.header}>Host a meetup</Text>
+      <PageHero sport={sport} caption={sport ? `Host ${sport}` : 'Host a game'} />
+      <Text style={styles.header}>Host a game</Text>
       <Text style={styles.sub}>
-        Pick an activity, a free place across Ottawa, and when — ASAP, one day, or weekly.
+        Tonight at a free place. Title is optional — we’ll name it for you.
       </Text>
+      {!customPlace && location ? (
+        <Text style={styles.placeLock}>Meet at {location}</Text>
+      ) : null}
 
       <SportPicker mode="single" label="Activity" selected={sport} onChange={setSport} />
 
       <Text style={styles.label}>Title</Text>
       <TextInput
         style={styles.input}
-        placeholder={`${sport ?? 'Activity'} open play`}
+        placeholder={`${sport ?? 'Activity'} tonight`}
         placeholderTextColor="#94A3B8"
         value={title}
         onChangeText={setTitle}
@@ -244,50 +379,99 @@ export default function CreateSessionScreen() {
       </ScrollView>
 
       <Text style={styles.label}>
-        Free place{matchingCourts.length ? ` · ${matchingCourts.length}` : ''}
+        Place{!customPlace && matchingCourts.length ? ` · ${matchingCourts.length} free` : ''}
       </Text>
-      {matchingCourts.length === 0 ? (
-        <Text style={styles.emptyPlaces}>
-          No free places tagged for {sport ?? 'this activity'} in that area. Try All Ottawa or another
-          activity.
-        </Text>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.courtRow}
+      <Text style={styles.hint}>
+        Public free spots first. Paid courts / ranges are DIY — you book them, then use Somewhere
+        else and say so in the notes. We don’t partner venues yet.
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.courtRow}
+      >
+        <TouchableOpacity
+          style={[styles.courtChip, customPlace && styles.courtChipOn]}
+          onPress={() => {
+            setCustomPlace(true);
+            setCourtId(undefined);
+          }}
+          activeOpacity={0.85}
         >
-          {matchingCourts.map((c) => {
-            const on = courtId === c.id;
-            return (
-              <TouchableOpacity
-                key={c.id}
-                style={[styles.courtChip, on && styles.courtChipOn]}
-                onPress={() => {
-                  setLocation(c.name);
-                  setCourtId(c.id);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.courtText, on && styles.courtTextOn]} numberOfLines={2}>
-                  {c.name}
-                </Text>
-                <Text style={[styles.courtMeta, on && styles.courtMetaOn]} numberOfLines={1}>
-                  {formatDistanceKm(c.distanceKm)} · {c.neighbourhood}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
+          <Text style={[styles.courtText, customPlace && styles.courtTextOn]}>
+            Somewhere else
+          </Text>
+          <Text style={[styles.courtMeta, customPlace && styles.courtMetaOn]}>
+            Free park or DIY booked court
+          </Text>
+        </TouchableOpacity>
+        {matchingCourts.map((c) => {
+          const on = !customPlace && courtId === c.id;
+          return (
+            <TouchableOpacity
+              key={c.id}
+              style={[styles.courtChip, on && styles.courtChipOn]}
+              onPress={() => {
+                setCustomPlace(false);
+                setLocation(c.name);
+                setCourtId(c.id);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.courtText, on && styles.courtTextOn]} numberOfLines={2}>
+                {c.name}
+              </Text>
+              <Text style={[styles.courtMeta, on && styles.courtMetaOn]} numberOfLines={1}>
+                {formatDistanceKm(c.distanceKm)} · {c.address || c.neighbourhood}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {customPlace ? (
+        <>
+          <Text style={styles.label}>Place name</Text>
+          <TextInput
+            style={styles.input}
+            value={customName}
+            onChangeText={setCustomName}
+            placeholder="e.g. Katimavik Park · or Sportsplex court 3"
+            placeholderTextColor="#94A3B8"
+          />
+          <Text style={styles.label}>Neighbourhood / area</Text>
+          <TextInput
+            style={styles.input}
+            value={customHood}
+            onChangeText={setCustomHood}
+            placeholder="e.g. Kanata"
+            placeholderTextColor="#94A3B8"
+          />
+          <Text style={styles.label}>Notes (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={customNotes}
+            onChangeText={setCustomNotes}
+            placeholder="Free public · or I booked ice / court myself"
+            placeholderTextColor="#94A3B8"
+          />
+        </>
+      ) : null}
+
+      {!customPlace && matchingCourts.length === 0 ? (
+        <Text style={styles.emptyPlaces}>
+          Nothing tagged here for {sport ?? 'this activity'} — use Somewhere else or try All Ottawa.
+        </Text>
+      ) : null}
 
       <Text style={styles.label}>When</Text>
       <View style={styles.whenRow}>
         {(
           [
+            { key: 'day' as const, label: 'Today / weekend' },
             { key: 'asap' as const, label: 'ASAP' },
-            { key: 'day' as const, label: 'Pick a day' },
             { key: 'weekly' as const, label: 'Weekly' },
+            { key: 'date' as const, label: 'Calendar' },
           ] as const
         ).map((opt) => {
           const on = whenMode === opt.key;
@@ -303,6 +487,15 @@ export default function CreateSessionScreen() {
           );
         })}
       </View>
+
+      {whenMode === 'date' ? (
+        <>
+          <Text style={styles.label}>Date</Text>
+          <DateField value={gameDate} onChange={setGameDate} />
+          <Text style={styles.label}>Time</Text>
+          <TimeField value={gameTime} onChange={setGameTime} />
+        </>
+      ) : null}
 
       {whenMode === 'asap' ? (
         <>
@@ -336,19 +529,41 @@ export default function CreateSessionScreen() {
             })}
           </View>
           <Text style={styles.label}>Time</Text>
-          <TextInput
-            style={styles.input}
-            value={timeNote}
-            onChangeText={setTimeNote}
-            placeholder="e.g. 10:00 AM · after lunch"
-            placeholderTextColor="#94A3B8"
-          />
+          <View style={styles.whenRow}>
+            {(
+              [
+                { hm: '17:00', note: '5:00 PM' },
+                { hm: '18:00', note: 'After work · 6:00 PM' },
+                { hm: '19:00', note: '7:00 PM' },
+                { hm: '10:00', note: '10:00 AM' },
+              ] as const
+            ).map((t) => {
+              const on = gameTime === t.hm;
+              return (
+                <TouchableOpacity
+                  key={t.hm}
+                  style={[styles.whenChip, on && styles.whenChipOn]}
+                  onPress={() => {
+                    setGameTime(t.hm);
+                    setTimeNote(t.note);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.whenText, on && styles.whenTextOn]}>{t.note}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </>
       ) : null}
 
       {whenMode === 'weekly' ? (
         <>
           <Text style={styles.hint}>Same slot every week — best for building a crew.</Text>
+          <Text style={styles.label}>First date</Text>
+          <DateField value={gameDate} onChange={setGameDate} />
+          <Text style={styles.label}>Time</Text>
+          <TimeField value={gameTime} onChange={setGameTime} />
           <Text style={styles.label}>Repeats</Text>
           <TextInput
             style={styles.input}
@@ -368,6 +583,27 @@ export default function CreateSessionScreen() {
         onChangeText={setMaxPlayers}
       />
 
+      <Text style={styles.label}>Notes (optional)</Text>
+      <TextInput
+        style={[styles.input, styles.notes]}
+        value={notes}
+        onChangeText={setNotes}
+        placeholder="Bring a ball · after work vibe · extra parking note"
+        placeholderTextColor="#94A3B8"
+        multiline
+      />
+
+      <SessionAudienceFields
+        playMix={playMix}
+        ageGroup={ageGroup}
+        skillLevel={skillLevel}
+        onPlayMix={setPlayMix}
+        onAgeGroup={setAgeGroup}
+        onSkillLevel={setSkillLevel}
+      />
+      <View style={{ height: 24 }} />
+    </ScrollView>
+    <View style={styles.stickyBar}>
       <TouchableOpacity
         style={styles.createBtn}
         onPress={create}
@@ -375,16 +611,25 @@ export default function CreateSessionScreen() {
         disabled={saving}
       >
         <Text style={styles.createText}>
-          {saving ? 'Creating…' : 'Create session + open chat'}
+          {saving ? 'Posting…' : 'Post it — open the chat'}
         </Text>
       </TouchableOpacity>
-    </ScrollView>
+    </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg },
-  container: { padding: 16, paddingBottom: 40 },
+  scroll: { flex: 1 },
+  container: { padding: 16, paddingBottom: 24 },
+  stickyBar: {
+    padding: 12,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    backgroundColor: theme.surfaceRaised,
+  },
   exitBar: {
     backgroundColor: theme.surface,
     borderRadius: 10,
@@ -402,10 +647,16 @@ const styles = StyleSheet.create({
   },
   sub: {
     color: theme.muted,
-    marginBottom: 20,
+    marginBottom: 8,
     marginTop: 4,
     lineHeight: 20,
     fontFamily: theme.fonts.body,
+  },
+  placeLock: {
+    color: theme.ink,
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 15,
+    marginBottom: 16,
   },
   label: {
     fontSize: 13,
@@ -439,6 +690,7 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     fontFamily: theme.fonts.body,
   },
+  notes: { minHeight: 72, textAlignVertical: 'top' },
   areaRow: { gap: 8, paddingBottom: 12 },
   areaChip: {
     backgroundColor: theme.surface,

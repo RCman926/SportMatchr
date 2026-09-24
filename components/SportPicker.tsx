@@ -13,8 +13,18 @@ import {
   OTTAWA_POPULAR_BY_SEASON,
   OTTAWA_POPULAR_SPORTS,
   getSeasonalPopularSports,
+  MAP_SPORTS,
+  popularSportsForBrowse,
+  currentOttawaSeason,
   OttawaSport,
+  SportSeason,
 } from '../constants/sports';
+import { theme } from '../constants/theme';
+import { SportPoster } from './SportScene';
+import { sportVisual } from '../lib/sportVisual';
+import { PressScale } from './motion';
+
+export type BrowseSeason = SportSeason | 'All' | 'In season';
 
 type MultiProps = {
   mode?: 'multi';
@@ -43,6 +53,7 @@ export function SportPicker(props: Props) {
     props.label ?? (isSingle(props) ? 'Sport' : 'Sports I play');
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [browseSeason, setBrowseSeason] = useState<SportSeason | 'All'>('All');
 
   const selectedList: string[] = isSingle(props)
     ? props.selected
@@ -53,6 +64,7 @@ export function SportPicker(props: Props) {
   const filteredCategories = useMemo(() => {
     const q = query.trim().toLowerCase();
     return Object.entries(OTTAWA_SPORT_CATEGORIES)
+      .filter(([category]) => browseSeason === 'All' || category === browseSeason)
       .map(([category, sports]) => ({
         category,
         sports: (sports as readonly OttawaSport[]).filter(
@@ -60,7 +72,7 @@ export function SportPicker(props: Props) {
         ),
       }))
       .filter((c) => c.sports.length > 0);
-  }, [query]);
+  }, [query, browseSeason]);
 
   const toggle = (sport: OttawaSport) => {
     if (isSingle(props)) {
@@ -81,37 +93,73 @@ export function SportPicker(props: Props) {
     props.onChange([...props.selected, sport]);
   };
 
+  const quickPicks = useMemo(() => {
+    if (!isSingle(props)) return [] as OttawaSport[];
+    const seasonal = getSeasonalPopularSports();
+    const rest = OTTAWA_POPULAR_SPORTS.filter((s) => !seasonal.includes(s));
+    const merged = [...seasonal, ...rest];
+    // Keep selected visible even if it isn't in the popular list
+    if (props.selected && !merged.includes(props.selected as OttawaSport)) {
+      return [props.selected as OttawaSport, ...merged];
+    }
+    return merged;
+  }, [props]);
+
   return (
     <View>
       <View style={styles.labelRow}>
         <Text style={styles.label}>{label}</Text>
         <TouchableOpacity onPress={() => setOpen(true)} activeOpacity={0.85}>
-          <Text style={styles.edit}>{isSingle(props) ? 'Choose' : 'Edit'}</Text>
+          <Text style={styles.edit}>{isSingle(props) ? 'All activities' : 'Edit'}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.chips}>
-        {selectedList.length === 0 ? (
+      {isSingle(props) ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickRow}
+        >
+          {quickPicks.map((s) => {
+            const on = props.selected === s;
+            return (
+              <PressScale key={s} onPress={() => props.onChange(s)} accessibilityLabel={s}>
+                <SportPoster sport={s} selected={on} />
+              </PressScale>
+            );
+          })}
           <TouchableOpacity
-            style={styles.emptyChip}
+            style={styles.moreChip}
             onPress={() => setOpen(true)}
             activeOpacity={0.85}
           >
-            <Text style={styles.emptyChipText}>Tap to pick sports</Text>
+            <Text style={styles.moreChipText}>More…</Text>
           </TouchableOpacity>
-        ) : (
-          selectedList.map((s) => (
+        </ScrollView>
+      ) : (
+        <View style={styles.chips}>
+          {selectedList.length === 0 ? (
             <TouchableOpacity
-              key={s}
-              style={styles.chipOn}
+              style={styles.emptyChip}
               onPress={() => setOpen(true)}
               activeOpacity={0.85}
             >
-              <Text style={styles.chipOnText}>{s}</Text>
+              <Text style={styles.emptyChipText}>Tap to pick sports</Text>
             </TouchableOpacity>
-          ))
-        )}
-      </View>
+          ) : (
+            selectedList.map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.chipOn, { backgroundColor: sportVisual(s).ink, borderColor: sportVisual(s).ink }]}
+                onPress={() => setOpen(true)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.chipOnText}>{s}</Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      )}
 
       <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
         <View style={styles.modal}>
@@ -133,43 +181,64 @@ export function SportPicker(props: Props) {
             autoCorrect={false}
           />
 
-          {!query && (
+          <Text style={styles.seasonNote}>
+            Browse by season anytime — shinny / hockey stay available in summer when you can rent
+            ice.
+          </Text>
+
+          {!query ? (
             <View style={styles.seasonTabs}>
-              {(['Winter', 'Summer', 'Year-round'] as const).map((season) => (
-                <View key={season} style={styles.seasonPill}>
-                  <Text style={styles.seasonPillText}>{season}</Text>
-                </View>
-              ))}
+              {(['All', 'Winter', 'Summer', 'Year-round'] as const).map((season) => {
+                const on = browseSeason === season;
+                return (
+                  <TouchableOpacity
+                    key={season}
+                    style={[styles.seasonPill, on && styles.seasonPillOn]}
+                    onPress={() => setBrowseSeason(season)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.seasonPillText, on && styles.seasonPillTextOn]}>
+                      {season}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          )}
+          ) : null}
 
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 40 }}
           >
             {!query &&
-              (Object.keys(OTTAWA_POPULAR_BY_SEASON) as (keyof typeof OTTAWA_POPULAR_BY_SEASON)[]).map(
-                (season) => (
-                  <View key={`pop-${season}`} style={styles.block}>
-                    <Text style={styles.cat}>Popular · {season}</Text>
-                    <View style={styles.chipsWrap}>
-                      {OTTAWA_POPULAR_BY_SEASON[season].map((s) => {
-                        const on = selectedList.includes(s);
-                        return (
-                          <TouchableOpacity
-                            key={s}
-                            style={[styles.chip, on && styles.chipOn]}
-                            onPress={() => toggle(s)}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={[styles.chipText, on && styles.chipOnText]}>{s}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+              (browseSeason === 'All'
+                ? (['Winter', 'Summer', 'Year-round'] as SportSeason[])
+                : [browseSeason]
+              ).map((season) => (
+                <View key={`pop-${season}`} style={styles.block}>
+                  <Text style={styles.cat}>Popular · {season}</Text>
+                  <View style={styles.chipsWrap}>
+                    {OTTAWA_POPULAR_BY_SEASON[season].map((s) => {
+                      const on = selectedList.includes(s);
+                      const vis = sportVisual(s);
+                      return (
+                        <TouchableOpacity
+                          key={s}
+                          style={[
+                            styles.chip,
+                            on && styles.chipOn,
+                            { backgroundColor: on ? vis.ink : vis.wash, borderColor: on ? vis.ink : vis.border },
+                          ]}
+                          onPress={() => toggle(s)}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={[styles.chipText, on && styles.chipOnText]}>{s}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
-                )
-              )}
+                </View>
+              ))}
 
             {filteredCategories.map(({ category, sports }) => (
               <View key={category} style={styles.block}>
@@ -177,10 +246,15 @@ export function SportPicker(props: Props) {
                 <View style={styles.chipsWrap}>
                   {sports.map((s) => {
                     const on = selectedList.includes(s);
+                    const vis = sportVisual(s);
                     return (
                       <TouchableOpacity
                         key={s}
-                        style={[styles.chip, on && styles.chipOn]}
+                        style={[
+                          styles.chip,
+                          on && styles.chipOn,
+                          { backgroundColor: on ? vis.ink : vis.wash, borderColor: on ? vis.ink : vis.border },
+                        ]}
                         onPress={() => toggle(s)}
                         activeOpacity={0.85}
                       >
@@ -198,24 +272,70 @@ export function SportPicker(props: Props) {
   );
 }
 
-/** Horizontal filter chips — swipe / scroll sideways to see all sports */
+/** Horizontal filter chips — season browse + compact sport posters */
 export function SportFilterBar({
   selected,
   onChange,
   includeAll = true,
+  onBrowseChange,
+  variant = 'browse',
 }: {
   selected: string | null;
   onChange: (sport: string | null) => void;
   includeAll?: boolean;
+  onBrowseChange?: (browse: BrowseSeason) => void;
+  /** Map: only facility basics. Browse: seasonal popular chips. */
+  variant?: 'browse' | 'map';
 }) {
+  const [browse, setBrowse] = useState<BrowseSeason>('In season');
+
   const chips = useMemo(() => {
-    const seasonal = getSeasonalPopularSports();
-    const rest = OTTAWA_POPULAR_SPORTS.filter((s) => !seasonal.includes(s));
-    return [...seasonal, ...rest];
-  }, []);
+    if (variant === 'map') return [...MAP_SPORTS];
+    const lead = popularSportsForBrowse(browse);
+    const rest = OTTAWA_POPULAR_SPORTS.filter((s) => !lead.includes(s));
+    if (browse === 'All' || browse === 'In season') return [...lead, ...rest];
+    return lead;
+  }, [browse, variant]);
+
+  const now = currentOttawaSeason();
+
+  const pickBrowse = (key: BrowseSeason) => {
+    setBrowse(key);
+    onBrowseChange?.(key);
+  };
 
   return (
     <View style={styles.filterWrap}>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        style={styles.seasonScroll}
+        contentContainerStyle={styles.seasonRow}
+      >
+        {(
+          [
+            ['In season', `Now · ${now}`],
+            ['Winter', 'Winter'],
+            ['Summer', 'Summer'],
+            ['Year-round', 'Year-round'],
+            ['All', 'All popular'],
+          ] as const
+        ).map(([key, label]) => {
+          const on = browse === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.seasonChip, on && styles.seasonChipOn]}
+              onPress={() => pickBrowse(key)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.seasonChipText, on && styles.seasonChipTextOn]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
       <ScrollView
         horizontal
         nestedScrollEnabled
@@ -235,20 +355,19 @@ export function SportFilterBar({
         {chips.map((s) => {
           const on = selected === s;
           return (
-            <TouchableOpacity
+            <PressScale
               key={s}
-              style={[styles.filterChip, on && styles.filterChipOn]}
               onPress={() => onChange(on ? null : s)}
-              activeOpacity={0.85}
+              accessibilityLabel={s}
             >
-              <Text style={[styles.filterText, on && styles.filterTextOn]} numberOfLines={1}>
-                {s}
-              </Text>
-            </TouchableOpacity>
+              <SportPoster sport={s} selected={on} width={96} height={72} />
+            </PressScale>
           );
         })}
       </ScrollView>
-      <Text style={styles.scrollHint}>Swipe for more activities — volleyball, shinny, tai chi…</Text>
+      {variant === 'browse' && browse === 'Winter' ? (
+        <Text style={styles.scrollHint}>Ice sports when you can book a rink</Text>
+      ) : null}
     </View>
   );
 }
@@ -266,7 +385,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   edit: {
-    color: '#0D9488',
+    color: '#E87722',
     fontWeight: '700',
     fontSize: 14,
   },
@@ -275,6 +394,27 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 16,
+  },
+  quickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 14,
+    paddingRight: 16,
+  },
+  moreChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8D4CC',
+    borderStyle: 'dashed',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+  },
+  moreChipText: {
+    color: '#5C6B62',
+    fontWeight: '700',
+    fontSize: 13,
   },
   emptyChip: {
     borderWidth: 1,
@@ -306,7 +446,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   done: {
-    color: '#0D9488',
+    color: '#E87722',
     fontWeight: '800',
     fontSize: 16,
   },
@@ -321,21 +461,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  seasonNote: {
+    fontFamily: theme.fonts.body,
+    fontSize: 12,
+    color: theme.muted,
+    lineHeight: 17,
+    marginBottom: 10,
+  },
   seasonTabs: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   seasonPill: {
-    backgroundColor: '#F4F6F8',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    backgroundColor: theme.surfaceRaised,
+    borderWidth: 1.5,
+    borderColor: theme.borderStrong,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: theme.radius.sm,
+  },
+  seasonPillOn: {
+    backgroundColor: theme.accent,
+    borderColor: theme.accentDark,
   },
   seasonPillText: {
-    color: '#0D9488',
-    fontWeight: '800',
+    color: theme.accentDark,
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 12,
+  },
+  seasonPillTextOn: {
+    color: '#FFFFFF',
+  },
+  seasonScroll: {
+    flexGrow: 0,
+    marginBottom: 8,
+  },
+  seasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 16,
+  },
+  seasonChip: {
+    backgroundColor: theme.accentSoft,
+    borderWidth: 1,
+    borderColor: theme.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.radius.sm,
+  },
+  seasonChipOn: {
+    backgroundColor: theme.accentDark,
+    borderColor: theme.accentDark,
+  },
+  seasonChipText: {
+    color: theme.accentDark,
+    fontFamily: theme.fonts.bodyBold,
     fontSize: 11,
+  },
+  seasonChipTextOn: {
+    color: '#FFFFFF',
   },
   block: { marginBottom: 8 },
   cat: {
@@ -357,16 +544,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   chipOn: {
-    backgroundColor: '#0D9488',
-    borderColor: '#0D9488',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    backgroundColor: '#E87722',
+    borderColor: '#E87722',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   chipText: {
     color: '#334155',
@@ -397,32 +590,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   filterChip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    height: 36,
+    backgroundColor: theme.surfaceRaised,
+    borderWidth: 2,
+    borderColor: theme.borderStrong,
+    width: 72,
+    height: 72,
+    borderRadius: theme.radius.md,
     justifyContent: 'center',
+    alignItems: 'center',
     flexShrink: 0,
   },
   filterChipOn: {
-    backgroundColor: '#E87722',
-    borderColor: '#E87722',
+    backgroundColor: theme.ball,
+    borderColor: theme.ballDark,
   },
   filterText: {
-    color: '#334155',
-    fontWeight: '600',
-    fontSize: 13,
+    color: theme.ink,
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 15,
+    textAlign: 'center',
   },
   filterTextOn: {
     color: '#FFFFFF',
+    fontFamily: theme.fonts.bodyBold,
   },
   scrollHint: {
-    marginTop: 4,
+    marginTop: 5,
     fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
+    color: theme.mutedSoft,
+    fontFamily: theme.fonts.bodyMed,
+    letterSpacing: 0.2,
   },
 });

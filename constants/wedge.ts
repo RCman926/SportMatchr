@@ -28,14 +28,12 @@ export const WEDGE = {
     'Basketball',
     'Soccer',
     'Shinny',
-    'Badminton',
     'Cricket',
     'Baseball',
     'Tennis',
     'Pickleball',
     'Running',
-    'Outdoor Yoga',
-    'Tai Chi',
+    'Disc Golf',
   ] as const,
   /** Court ids to surface first in Create / Map (free, multi-use) */
   priorityCourtIds: [
@@ -47,10 +45,10 @@ export const WEDGE = {
     'dow-rink',
   ] as const,
   copy: {
-    homeSub: 'Free places near you — any sport, any pace.',
-    pulseArea: 'Ottawa · who’s around right now',
+    homeSub: 'Find a game. Meet outside. Free parks first.',
+    pulseArea: 'Ottawa · who’s free right now',
     seedHint:
-      'Host across sports at free public places. Expand to Montreal & Toronto after strangers meet without you.',
+      'Host at free public places. Expand to Montreal & Toronto after strangers meet without you.',
   },
 } as const;
 

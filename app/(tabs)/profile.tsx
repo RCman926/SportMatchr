@@ -8,10 +8,10 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {
-  MY_PROFILE,
   VERIFICATION_LABEL,
   VerificationLevel,
   PlayerProfile,
@@ -20,6 +20,8 @@ import { VerifiedBadge } from '../../components/VerifiedBadge';
 import { ProfileAvatar } from '../../components/ProfileAvatar';
 import { SportPicker } from '../../components/SportPicker';
 import { getSeasonalPopularSports } from '../../constants/sports';
+import { RecordCard } from '../../components/RecordCard';
+import { PageHero } from '../../components/SportScene';
 import { WEDGE } from '../../constants/wedge';
 import {
   fetchMyProfile,
@@ -27,12 +29,15 @@ import {
   stopLiveSolo,
   updateMyProfile,
   uploadAvatar,
+  deleteMyAccount,
   seedFounderSessions,
   trustLabel,
 } from '../../lib/api';
-import { profilePhotoPrompt } from '../../lib/profilePhoto';
+import { clearProfilePhoto, profilePhotoPrompt } from '../../lib/profilePhoto';
 import { useAuthStore } from '../../lib/authStore';
 import { useLocationStore } from '../../lib/locationStore';
+import { canAccessFounderOps } from '../../lib/founder';
+import { theme } from '../../constants/theme';
 
 const STEPS: { level: VerificationLevel; title: string; detail: string }[] = [
   {
@@ -54,6 +59,26 @@ const STEPS: { level: VerificationLevel; title: string; detail: string }[] = [
 
 const RANK = { none: 0, phone: 1, photo: 2, id: 3 } as const;
 
+const EMPTY_GUEST: PlayerProfile = {
+  id: 'guest',
+  name: 'Guest',
+  handle: '@you',
+  bio: 'Create a free account to host, join games, and show up on Looking.',
+  city: 'Ottawa',
+  neighbourhood: WEDGE.pocketName,
+  sports: [],
+  skill: 'Any',
+  verification: 'none',
+  gamesPlayed: 0,
+  rating: 5,
+  streakDays: 0,
+  memberSince: '',
+  preferredCourts: [],
+  lookingNow: false,
+  shows: 0,
+  noShows: 0,
+};
+
 export default function ProfileScreen() {
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
   const canAct = useAuthStore((s) => s.canAct);
@@ -62,19 +87,24 @@ export default function ProfileScreen() {
   const signOut = useAuthStore((s) => s.signOut);
   const exitFounderPreview = useAuthStore((s) => s.exitFounderPreview);
   const presenceCoords = useLocationStore((s) => s.presenceCoords);
+  const founderOps = canAccessFounderOps({
+    email: user?.email,
+    isFounderPreview,
+  });
 
-  const [profile, setProfile] = useState<PlayerProfile>(MY_PROFILE);
+  const [profile, setProfile] = useState<PlayerProfile>(EMPTY_GUEST);
   const [lookingNow, setLookingNow] = useState(false);
-  const [sports, setSports] = useState<string[]>(['Pickleball']);
+  const [sports, setSports] = useState<string[]>([]);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!isSignedIn) {
-      setProfile(MY_PROFILE);
-      setLookingNow(MY_PROFILE.lookingNow);
-      setSports([...MY_PROFILE.sports]);
-      setAvatarUri(MY_PROFILE.avatarUrl ?? null);
+      setProfile(EMPTY_GUEST);
+      setLookingNow(false);
+      setSports([]);
+      setAvatarUri(null);
       setLoading(false);
       return;
     }
@@ -82,7 +112,7 @@ export default function ProfileScreen() {
     if (me) {
       setProfile(me);
       setLookingNow(me.lookingNow);
-      setSports(me.sports);
+      setSports(me.sports?.length ? me.sports : []);
       setAvatarUri(me.avatarUrl ?? null);
     }
     setLoading(false);
@@ -117,18 +147,75 @@ export default function ProfileScreen() {
     }
   };
 
+  const deleteAccount = async () => {
+    const message =
+      'This permanently deletes your profile, hosted games, memberships, messages, and photo. This cannot be undone.';
+    const confirmed =
+      Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.confirm(`Delete your SportMatchr account?\n\n${message}`)
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert('Delete your account?', message, [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              {
+                text: 'Delete permanently',
+                style: 'destructive',
+                onPress: () => resolve(true),
+              },
+            ]);
+          });
+    if (!confirmed) return;
+
+    setDeleting(true);
+    const result = await deleteMyAccount();
+    setDeleting(false);
+    if (!result.ok) {
+      Alert.alert('Couldn’t delete account', result.error ?? 'Try again');
+      return;
+    }
+    await clearProfilePhoto();
+    router.replace('/(tabs)/home');
+  };
+
   const myRank = RANK[profile.verification];
 
   if (loading) {
     return (
       <View style={[styles.screen, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color="#0D9488" />
+        <ActivityIndicator color={theme.accent} />
       </View>
+    );
+  }
+
+  if (!isSignedIn && !isFounderPreview) {
+    return (
+      <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+        <PageHero caption="Your profile · Ottawa" />
+        <View style={styles.hero}>
+          <ProfileAvatar name="You" uri={null} size={96} showPhotoHint />
+          <Text style={styles.name}>Your profile</Text>
+          <Text style={styles.bio}>
+            Browse free places without an account. Sign up free to host, join games, chat, or say
+            you’re free on Looking.
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.authBtn}
+          onPress={() => router.push('/auth')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.authText}>Sign up / sign in</Text>
+        </TouchableOpacity>
+        <View style={styles.safetyCard}>
+          <Text style={styles.safetyTitle}>Your safety status</Text>
+          <Text style={styles.safetyBody}>Guest — browse only. No account yet.</Text>
+        </View>
+      </ScrollView>
     );
   }
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+      <PageHero caption={`${WEDGE.city} · play near you`} />
       <View style={styles.hero}>
         <TouchableOpacity onPress={addPhoto} activeOpacity={0.85}>
           <ProfileAvatar name={profile.name} uri={avatarUri} size={96} showPhotoHint />
@@ -140,7 +227,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
         {!avatarUri ? (
           <Text style={styles.photoWarn}>
-            Required for safety — strangers need to recognize you at the court.
+            Recommended for safer meetups — strangers can recognize you at the court.
           </Text>
         ) : (
           <Text style={styles.photoOk}>Face photo on profile · safer meetups</Text>
@@ -156,26 +243,31 @@ export default function ProfileScreen() {
         <Text style={styles.bio}>{profile.bio}</Text>
       </View>
 
-      <View style={styles.stats}>
-        <View style={styles.stat}>
-          <Text style={styles.statNum}>{profile.gamesPlayed}</Text>
-          <Text style={styles.statLabel}>Games</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statNum}>{profile.shows ?? 0}</Text>
-          <Text style={styles.statLabel}>Shows</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statNum}>{profile.noShows ?? 0}</Text>
-          <Text style={styles.statLabel}>No-shows</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statNum}>{profile.streakDays}</Text>
-          <Text style={styles.statLabel}>Day streak</Text>
-        </View>
-      </View>
+      {isSignedIn ? (
+        <>
+          <View style={styles.stats}>
+            <View style={styles.stat}>
+              <Text style={styles.statNum}>{profile.gamesPlayed}</Text>
+              <Text style={styles.statLabel}>Games</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statNum}>{profile.shows ?? 0}</Text>
+              <Text style={styles.statLabel}>Shows</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statNum}>{profile.noShows ?? 0}</Text>
+              <Text style={styles.statLabel}>No-shows</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statNum}>{profile.streakDays}</Text>
+              <Text style={styles.statLabel}>Day streak</Text>
+            </View>
+          </View>
 
-      <Text style={styles.trust}>{trustLabel(profile)}</Text>
+          <Text style={styles.trust}>{trustLabel(profile)}</Text>
+          <RecordCard profile={profile} />
+        </>
+      ) : null}
 
       {isFounderPreview ? (
         <TouchableOpacity
@@ -192,19 +284,21 @@ export default function ProfileScreen() {
 
       {isSignedIn ? (
         <>
-          <TouchableOpacity
-            style={styles.authBtn}
-            onPress={async () => {
-              const res = await seedFounderSessions();
-              if (res.error) Alert.alert('Seed failed', res.error);
-              else if (res.created === 0)
-                Alert.alert('Already seeded', 'You already have open host sessions.');
-              else Alert.alert('Seeded', `Created ${res.created} sessions.`);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.authText}>Seed Glebe pickleball sessions</Text>
-          </TouchableOpacity>
+          {founderOps ? (
+            <TouchableOpacity
+              style={styles.authBtn}
+              onPress={async () => {
+                const res = await seedFounderSessions();
+                if (res.error) Alert.alert('Seed failed', res.error);
+                else if (res.created === 0)
+                  Alert.alert('Already seeded', 'You already have open host sessions.');
+                else Alert.alert('Seeded', `Created ${res.created} multi-sport sessions.`);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.authText}>Seed multi-sport Ottawa sessions</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={styles.signOutBtn}
             onPress={async () => {
@@ -215,6 +309,18 @@ export default function ProfileScreen() {
           >
             <Text style={styles.signOutText}>Sign out</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => void deleteAccount()}
+            activeOpacity={0.85}
+            disabled={deleting}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account permanently"
+          >
+            <Text style={styles.deleteText}>
+              {deleting ? 'Deleting account…' : 'Delete account permanently'}
+            </Text>
+          </TouchableOpacity>
         </>
       ) : (
         <TouchableOpacity
@@ -222,16 +328,14 @@ export default function ProfileScreen() {
           onPress={() => router.push('/auth')}
           activeOpacity={0.85}
         >
-          <Text style={styles.authText}>
-            {isFounderPreview ? 'Create a real account (optional)' : 'Sign in / founder preview'}
-          </Text>
+          <Text style={styles.authText}>Create a real account</Text>
         </TouchableOpacity>
       )}
 
       <View style={styles.cardRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Looking to play now</Text>
-          <Text style={styles.hint}>Show up in Solos for instant games</Text>
+          <Text style={styles.label}>I’m ready now</Text>
+          <Text style={styles.hint}>Green on the board — people looking for a game</Text>
         </View>
         <Switch
           value={lookingNow}
@@ -240,35 +344,40 @@ export default function ProfileScreen() {
               router.push('/auth');
               return;
             }
-            if (v && !avatarUri && !isFounderPreview) {
-              Alert.alert('Add a face photo first', 'Required for safer Go Live.');
-              return;
-            }
             setLookingNow(v);
             if (v) {
               const res = await goLiveSolo(
-                getSeasonalPopularSports()[0] ?? WEDGE.primarySport,
+                sports[0] ?? getSeasonalPopularSports()[0] ?? WEDGE.primarySport,
                 presenceCoords()
               );
-              if (!res.ok) Alert.alert('Failed', res.error ?? 'Try again');
+              if (!res.ok) {
+                setLookingNow(false);
+                Alert.alert('Failed', res.error ?? 'Try again');
+                return;
+              }
             } else {
               await stopLiveSolo();
             }
             if (isSignedIn) await updateMyProfile({ looking_now: v });
           }}
-          trackColor={{ false: '#CBD5E1', true: '#0D9488' }}
-          thumbColor={lookingNow ? '#0D9488' : '#FFFFFF'}
+          trackColor={{ false: theme.borderStrong, true: theme.accent }}
+          thumbColor={lookingNow ? theme.accent : theme.surfaceRaised}
         />
       </View>
 
-      <SportPicker label="Sports I play" selected={sports} onChange={setSports} max={10} />
-      <Text style={styles.pickerHint}>
-        Pickleball first in {WEDGE.pocketName}. Other sports stay available.
-      </Text>
+      {isSignedIn ? (
+        <>
+          <SportPicker label="Sports I play" selected={sports} onChange={setSports} max={10} />
+          <Text style={styles.pickerHint}>
+            Multi-sport Ottawa — pick what you actually play.
+          </Text>
+        </>
+      ) : null}
 
       <Text style={styles.section}>Trust — face photo + sign in</Text>
       <Text style={styles.sectionSub}>
-        Real face photo is required. Email magic link is live. Phone/ID come later.
+        A real face photo is required before Join or Looking so people can recognize you at the
+        public place. Phone verification is next; ID only if abuse requires it.
       </Text>
 
       {STEPS.map((step) => {
@@ -286,16 +395,24 @@ export default function ProfileScreen() {
         );
       })}
 
+      <TouchableOpacity
+        style={styles.legalBtn}
+        onPress={() => router.push('/legal')}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.legalBtnText}>Terms & privacy</Text>
+      </TouchableOpacity>
+
       <View style={styles.safetyCard}>
         <Text style={styles.safetyTitle}>Your safety status</Text>
         <Text style={styles.safetyBody}>
-          {avatarUri ? 'Face photo set. ' : 'No face photo yet — add one. '}
+          {avatarUri ? 'Face photo set. ' : 'No face photo yet — add one before joining. '}
           You’re {VERIFICATION_LABEL[profile.verification].toLowerCase()}.{' '}
           {isSignedIn
-            ? 'Signed in to live backend.'
+            ? 'Signed in.'
             : isFounderPreview
-              ? 'Founder preview — demo data, full UI.'
-              : 'Guest — demo mode.'}
+              ? 'Founder preview — sample data, full UI.'
+              : 'Guest — browse only.'}
         </Text>
       </View>
     </ScrollView>
@@ -303,107 +420,140 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F4F6F8' },
+  screen: { flex: 1, backgroundColor: theme.bg },
   container: { padding: 16, paddingBottom: 40 },
   hero: { alignItems: 'center', marginBottom: 16 },
   photoBtn: {
     marginTop: 10,
-    backgroundColor: '#0D9488',
+    backgroundColor: theme.ball,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
   },
-  photoBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
+  photoBtnText: { color: theme.surfaceRaised, fontFamily: theme.fonts.bodyBold, fontSize: 13 },
   photoWarn: {
     marginTop: 8,
-    color: '#B45309',
+    color: theme.warnFg,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: theme.fonts.bodyMed,
     textAlign: 'center',
     paddingHorizontal: 16,
     lineHeight: 17,
   },
-  photoOk: { marginTop: 8, color: '#0F766E', fontSize: 12, fontWeight: '700' },
-  name: { fontSize: 28, fontWeight: '800', color: '#0F172A', marginTop: 10 },
-  handle: { fontSize: 14, color: '#64748B', marginTop: 4, marginBottom: 4 },
-  email: { fontSize: 12, color: '#0D9488', marginBottom: 8, fontWeight: '600' },
+  photoOk: { marginTop: 8, color: theme.accentDark, fontSize: 12, fontFamily: theme.fonts.bodyBold },
+  name: { fontSize: 28, fontFamily: theme.fonts.displayBold, color: theme.ink, marginTop: 10 },
+  handle: { fontSize: 14, color: theme.muted, marginTop: 4, marginBottom: 4, fontFamily: theme.fonts.body },
+  email: { fontSize: 12, color: theme.accent, marginBottom: 8, fontFamily: theme.fonts.bodyMed },
   bio: {
     marginTop: 10,
     textAlign: 'center',
-    color: '#334155',
+    color: theme.muted,
     lineHeight: 20,
     paddingHorizontal: 12,
+    fontFamily: theme.fonts.body,
   },
   stats: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: theme.surfaceRaised,
+    borderRadius: theme.radius.md,
     paddingVertical: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
   },
   stat: { flex: 1, alignItems: 'center' },
-  statNum: { color: '#0F172A', fontSize: 22, fontWeight: '800' },
-  statLabel: { color: '#0D9488', fontSize: 12, marginTop: 2 },
+  statNum: { color: theme.ink, fontSize: 22, fontFamily: theme.fonts.displayBold },
+  statLabel: { color: theme.accent, fontSize: 12, marginTop: 2, fontFamily: theme.fonts.bodyMed },
   trust: {
-    color: '#5C6B62',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
-    fontWeight: '600',
+    color: theme.muted,
+    fontSize: 13,
+    marginBottom: 12,
+    textAlign: 'center',
+    fontFamily: theme.fonts.body,
   },
   authBtn: {
-    backgroundColor: '#CCFBF1',
-    borderWidth: 1,
-    borderColor: '#0D9488',
-    borderRadius: 12,
-    paddingVertical: 12,
+    backgroundColor: theme.ball,
+    borderRadius: theme.radius.md,
+    paddingVertical: 14,
     alignItems: 'center',
     marginBottom: 10,
   },
-  authText: { color: '#0D9488', fontWeight: '800' },
-  signOutBtn: { alignItems: 'center', marginBottom: 16, padding: 8 },
-  signOutText: { color: '#EF4444', fontWeight: '700' },
+  authText: { color: theme.surfaceRaised, fontFamily: theme.fonts.bodyBold, fontSize: 15 },
+  signOutBtn: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: theme.radius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: theme.surfaceRaised,
+  },
+  signOutText: { color: theme.muted, fontFamily: theme.fonts.bodyBold, fontSize: 14 },
+  deleteBtn: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: -8,
+    marginBottom: 16,
+  },
+  deleteText: {
+    color: theme.danger,
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 13,
+    textDecorationLine: 'underline',
+  },
   cardRow: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 20,
-  },
-  label: { fontSize: 13, fontWeight: '700', color: '#64748B', marginBottom: 4 },
-  hint: { fontSize: 13, color: '#64748B' },
-  pickerHint: {
-    color: '#64748B',
-    fontSize: 12,
-    marginTop: -8,
-    marginBottom: 20,
-    lineHeight: 17,
-  },
-  section: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 6 },
-  sectionSub: { color: '#64748B', fontSize: 13, lineHeight: 18, marginBottom: 12 },
-  verifyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 10,
-  },
-  verifyTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  verifyTitle: { fontWeight: '800', color: '#0F172A', fontSize: 15 },
-  verifyStatus: { color: '#64748B', fontWeight: '700', fontSize: 12 },
-  verifyDone: { color: '#0D9488' },
-  verifyDetail: { color: '#64748B', fontSize: 13, lineHeight: 18 },
-  safetyCard: {
-    marginTop: 8,
-    backgroundColor: '#CCFBF1',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: theme.surfaceRaised,
+    borderRadius: theme.radius.md,
+    padding: 14,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.border,
   },
-  safetyTitle: { fontWeight: '800', color: '#0D9488', marginBottom: 6 },
-  safetyBody: { color: '#0F766E', lineHeight: 20, fontSize: 13 },
+  label: { fontSize: 15, fontFamily: theme.fonts.bodyBold, color: theme.ink },
+  hint: { fontSize: 12, color: theme.muted, marginTop: 2, fontFamily: theme.fonts.body },
+  pickerHint: { fontSize: 12, color: theme.muted, marginBottom: 16, marginTop: -4, fontFamily: theme.fonts.body },
+  section: {
+    fontSize: 18,
+    fontFamily: theme.fonts.displayBold,
+    color: theme.ink,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  sectionSub: { fontSize: 13, color: theme.muted, marginBottom: 12, lineHeight: 18, fontFamily: theme.fonts.body },
+  verifyCard: {
+    backgroundColor: theme.surfaceRaised,
+    borderRadius: theme.radius.md,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  verifyTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  verifyTitle: { fontFamily: theme.fonts.bodyBold, color: theme.ink, fontSize: 14 },
+  verifyStatus: { color: theme.mutedSoft, fontSize: 12, fontFamily: theme.fonts.bodyBold },
+  verifyDone: { color: theme.accent },
+  verifyDetail: { color: theme.muted, fontSize: 13, lineHeight: 18, fontFamily: theme.fonts.body },
+  legalBtn: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: theme.radius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+    backgroundColor: theme.surfaceRaised,
+  },
+  legalBtnText: { color: theme.ink, fontFamily: theme.fonts.bodyBold, fontSize: 14 },
+  safetyCard: {
+    marginTop: 16,
+    backgroundColor: theme.accentSoft,
+    borderRadius: theme.radius.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.accent,
+  },
+  safetyTitle: { fontFamily: theme.fonts.bodyBold, color: theme.accentDark, marginBottom: 6 },
+  safetyBody: { color: theme.accentDark, fontSize: 13, lineHeight: 18, fontFamily: theme.fonts.body },
 });

@@ -37,6 +37,6 @@ export function useUserLocation() {
     permission,
     loading,
     refresh,
-    isLive: source === 'gps',
+    isLive: source === 'gps' || source === 'manual',
   };
 }
