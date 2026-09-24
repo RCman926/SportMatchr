@@ -3,9 +3,9 @@ import {
   coarsenCoords,
   getUserLocation,
   LatLng,
-  areaLabel,
   DEFAULT_OTTAWA_CENTER,
   AREA_PRESETS,
+  FALLBACK_START_LABEL,
   writeManualArea,
 } from './location';
 
@@ -29,7 +29,7 @@ type LocationStore = {
 
 export const useLocationStore = create<LocationStore>((set, get) => ({
   coords: DEFAULT_OTTAWA_CENTER,
-  area: areaLabel(DEFAULT_OTTAWA_CENTER),
+  area: FALLBACK_START_LABEL,
   source: 'fallback',
   permission: 'undetermined',
   loading: false,
@@ -87,8 +87,11 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
       });
       return { ok, errorHint };
     } catch {
-      const errorHint = 'Couldn’t get GPS. Pick or type your area below.';
+      const errorHint =
+        'Couldn’t get GPS. Pick your neighbourhood. The board is showing a central Ottawa starting point until you do.';
       set({
+        coords: DEFAULT_OTTAWA_CENTER,
+        area: FALLBACK_START_LABEL,
         loading: false,
         needsLocation: true,
         source: 'fallback',

@@ -34,7 +34,7 @@ import {
 } from '../../lib/api';
 import { useLocationStore } from '../../lib/locationStore';
 import { useAuthStore } from '../../lib/authStore';
-import { formatDistanceKm, haversineKm, courtCoords } from '../../lib/location';
+import { AREA_PRESETS, formatDistanceKm, haversineKm, courtCoords, nearYouStatus } from '../../lib/location';
 import { theme } from '../../constants/theme';
 import { ensureFacePhotoForMeetup } from '../../lib/profilePhoto';
 import { getSeasonalPopularSports } from '../../constants/sports';
@@ -86,10 +86,20 @@ export default function SolosScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [areaOpen, setAreaOpen] = useState(false);
   const coords = useLocationStore((s) => s.coords);
   const area = useLocationStore((s) => s.area);
   const locSource = useLocationStore((s) => s.source);
   const refreshLoc = useLocationStore((s) => s.refresh);
+  const setManualArea = useLocationStore((s) => s.setManualArea);
+  const locErrorHint = useLocationStore((s) => s.errorHint);
+  const locLoading = useLocationStore((s) => s.loading);
+  const near = nearYouStatus(locSource, area);
+  const locationUnset = locSource === 'fallback';
+
+  useEffect(() => {
+    if (!locLoading && locationUnset) setAreaOpen(true);
+  }, [locLoading, locationUnset]);
   const presenceCoords = useLocationStore((s) => s.presenceCoords);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
@@ -269,25 +279,62 @@ export default function SolosScreen() {
         })}
       </View>
 
-      {view !== 'hangout' ? (
-        <View style={styles.locBar}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.locLabel}>
-              {locSource === 'gps' ? 'Near' : locSource === 'manual' ? 'Your area' : 'Around'}
-            </Text>
-            <Text style={styles.locValue}>{area}</Text>
+      <>
+          <View style={styles.locBar}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.locLabel}>{near.label}</Text>
+              <Text style={styles.locValue}>{near.value}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.locBtn, locationUnset && styles.locBtnEmphasis]}
+              onPress={() => setAreaOpen((v) => !v)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={
+                areaOpen ? 'Hide neighbourhood picker' : locationUnset ? 'Pick neighbourhood' : 'Change area'
+              }
+            >
+              <Text style={[styles.locBtnText, locationUnset && styles.locBtnTextEmphasis]}>
+                {areaOpen ? 'Hide' : locationUnset ? 'Pick neighbourhood' : 'Change area'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.locBtn}
-            onPress={() => void refreshLoc({ forcePrompt: true })}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.locBtnText}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
+          {locationUnset && near.detail ? <Text style={styles.locUnset}>{near.detail}</Text> : null}
+          {areaOpen ? (
+            <View style={styles.areaBox}>
+              {locErrorHint ? <Text style={styles.locUnset}>{locErrorHint}</Text> : null}
+              <TouchableOpacity
+                style={styles.locBtn}
+                onPress={() => void refreshLoc({ forcePrompt: true })}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.locBtnText}>{locLoading ? 'Locating…' : 'Use my location'}</Text>
+              </TouchableOpacity>
+              <View style={styles.areaChips}>
+                {AREA_PRESETS.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[styles.areaChip, locSource === 'manual' && area === p.label && styles.areaChipOn]}
+                    onPress={() => setManualArea(p.id)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.areaChipText}>{p.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : null}
+      </>
 
-      {view === 'hangout' ? <HangoutChat area={area} /> : null}
+      {view === 'hangout' ? (
+        <HangoutChat
+          area={
+            locationUnset
+              ? 'a central Ottawa starting point (Glebe) — location isn’t set yet'
+              : area
+          }
+        />
+      ) : null}
 
       {view === 'looking' ? (
         <>
@@ -640,14 +687,47 @@ const styles = StyleSheet.create({
   },
   locBtn: {
     backgroundColor: theme.accentSoft,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: theme.accent,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  locBtnEmphasis: {
+    backgroundColor: theme.ball,
+    borderColor: theme.ballDark,
   },
   locBtnText: {
     color: theme.accentDark,
     fontFamily: theme.fonts.bodyBold,
-    fontSize: 12,
+    fontSize: 14,
+  },
+  locBtnTextEmphasis: { color: '#FFFFFF' },
+  locUnset: {
+    fontFamily: theme.fonts.body,
+    fontSize: 14,
+    color: theme.ink,
+    lineHeight: 20,
+    marginTop: -4,
+    marginBottom: 10,
+  },
+  areaBox: { marginBottom: 12, gap: 8 },
+  areaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  areaChip: {
+    backgroundColor: theme.surfaceRaised,
+    borderWidth: 1.5,
+    borderColor: theme.borderStrong,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  areaChipOn: { backgroundColor: theme.accentSoft, borderColor: theme.accent },
+  areaChipText: {
+    fontFamily: theme.fonts.bodyBold,
+    fontSize: 13,
+    color: theme.ink,
   },
   liveBtn: {
     backgroundColor: theme.surface,

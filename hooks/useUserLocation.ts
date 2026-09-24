@@ -4,12 +4,12 @@ import {
   LatLng,
   UserLocationResult,
   DEFAULT_OTTAWA_CENTER,
-  areaLabel,
+  FALLBACK_START_LABEL,
 } from '../lib/location';
 
 export function useUserLocation() {
   const [coords, setCoords] = useState<LatLng>(DEFAULT_OTTAWA_CENTER);
-  const [area, setArea] = useState(areaLabel(DEFAULT_OTTAWA_CENTER));
+  const [area, setArea] = useState(FALLBACK_START_LABEL);
   const [source, setSource] = useState<UserLocationResult['source']>('fallback');
   const [permission, setPermission] =
     useState<UserLocationResult['permission']>('undetermined');

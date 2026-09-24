@@ -11,7 +11,7 @@ import { SportFilterBar, type BrowseSeason } from '../../components/SportPicker'
 import { WEDGE, isWedgeNeighbourhood } from '../../constants/wedge';
 import { currentOttawaSeason } from '../../constants/sports';
 import { useLocationStore } from '../../lib/locationStore';
-import { formatDistanceKm, haversineKm } from '../../lib/location';
+import { AREA_PRESETS, formatDistanceKm, haversineKm, nearYouStatus } from '../../lib/location';
 import { theme, cardShadow } from '../../constants/theme';
 import { sportPinColor } from '../../lib/sportPinColor';
 import { PageHero, SportScene, SportSceneStrip } from '../../components/SportScene';
@@ -95,11 +95,21 @@ export default function MapScreen() {
   const [seasonFilter, setSeasonFilter] = useState<SeasonFilter>(seasonFilterDefault);
   const [selectedId, setSelectedId] = useState<string | null>(WEDGE.priorityCourtIds[0] ?? null);
   const [copied, setCopied] = useState(false);
+  const [areaOpen, setAreaOpen] = useState(false);
 
   const coords = useLocationStore((s) => s.coords);
   const area = useLocationStore((s) => s.area);
   const source = useLocationStore((s) => s.source);
   const refresh = useLocationStore((s) => s.refresh);
+  const setManualArea = useLocationStore((s) => s.setManualArea);
+  const errorHint = useLocationStore((s) => s.errorHint);
+  const locLoading = useLocationStore((s) => s.loading);
+  const near = nearYouStatus(source, area);
+  const locationUnset = source === 'fallback';
+
+  useEffect(() => {
+    if (!locLoading && locationUnset) setAreaOpen(true);
+  }, [locLoading, locationUnset]);
   const canAct = useAuthStore((s) => s.canAct);
 
   const courts = useMemo(() => {
@@ -185,19 +195,42 @@ export default function MapScreen() {
 
       <View style={styles.locBar}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.locLabel}>
-            {source === 'gps'
-              ? 'You are near'
-              : source === 'manual'
-                ? 'Your area'
-                : 'Default area'}
-          </Text>
-          <Text style={styles.locValue}>{area}</Text>
+          <Text style={styles.locLabel}>{near.label}</Text>
+          <Text style={styles.locValue}>{near.value}</Text>
         </View>
-        <TouchableOpacity style={styles.locBtn} onPress={jumpNearMe} activeOpacity={0.85}>
-          <Text style={styles.locBtnText}>Near me</Text>
+        <TouchableOpacity
+          style={[styles.locBtn, locationUnset && styles.locBtnEmphasis]}
+          onPress={() => setAreaOpen((v) => !v)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={areaOpen ? 'Hide neighbourhood picker' : locationUnset ? 'Pick neighbourhood' : 'Change area'}
+        >
+          <Text style={[styles.locBtnText, locationUnset && styles.locBtnTextEmphasis]}>
+            {areaOpen ? 'Hide' : locationUnset ? 'Pick neighbourhood' : 'Change area'}
+          </Text>
         </TouchableOpacity>
       </View>
+      {locationUnset && near.detail ? <Text style={styles.locUnset}>{near.detail}</Text> : null}
+      {areaOpen ? (
+        <View style={styles.areaBox}>
+          {errorHint ? <Text style={styles.locUnset}>{errorHint}</Text> : null}
+          <TouchableOpacity style={styles.locBtn} onPress={() => void jumpNearMe()} activeOpacity={0.85}>
+            <Text style={styles.locBtnText}>{locLoading ? 'Locating…' : 'Use my location'}</Text>
+          </TouchableOpacity>
+          <View style={styles.areaChips}>
+            {AREA_PRESETS.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.areaChip, source === 'manual' && area === p.label && styles.areaChipOn]}
+                onPress={() => setManualArea(p.id)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.areaChipText}>{p.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       <SportFilterBar
         variant="map"
@@ -354,11 +387,39 @@ const styles = StyleSheet.create({
   locValue: { color: theme.ink, fontWeight: '600', fontSize: 13, marginTop: 2 },
   locBtn: {
     backgroundColor: theme.accentSoft,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: theme.accent,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  locBtnEmphasis: {
+    backgroundColor: theme.ball,
+    borderColor: theme.ballDark,
+  },
+  locBtnText: { color: theme.accentDark, fontWeight: '800', fontSize: 14 },
+  locBtnTextEmphasis: { color: '#FFFFFF' },
+  locUnset: {
+    color: theme.ink,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: -4,
+    marginBottom: 10,
+  },
+  areaBox: { marginBottom: 12, gap: 8 },
+  areaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  areaChip: {
+    backgroundColor: theme.surfaceRaised,
+    borderWidth: 1.5,
+    borderColor: theme.borderStrong,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
   },
-  locBtnText: { color: theme.accentDark, fontWeight: '800', fontSize: 12 },
+  areaChipOn: { backgroundColor: theme.accentSoft, borderColor: theme.accent },
+  areaChipText: { color: theme.ink, fontWeight: '800', fontSize: 13 },
   selectedCard: {
     backgroundColor: theme.accentSoft,
     borderRadius: 14,

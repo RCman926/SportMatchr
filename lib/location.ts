@@ -13,15 +13,25 @@ export const DEFAULT_OTTAWA_CENTER: LatLng = {
   lng: -75.6836,
 };
 
-/** Manual area picks when desktop GPS fails (common on Windows). */
+/**
+ * Shown only when there is no GPS fix and no manual pick.
+ * Do not run this through areaLabel() — the nearest court can be a suburb
+ * and would look like a confirmed “you are near” location.
+ */
+export const FALLBACK_START_LABEL = 'Glebe · central Ottawa';
+
+export const FALLBACK_START_DETAIL =
+  'Location isn’t set yet. The board is showing a central Ottawa starting point (Glebe) until you share your location or pick your neighbourhood.';
+
+/** Manual area picks when desktop GPS fails (common on Windows). Glebe and Centretown lead. */
 export const AREA_PRESETS: { id: string; label: string; coords: LatLng }[] = [
+  { id: 'glebe', label: 'Glebe', coords: DEFAULT_OTTAWA_CENTER },
+  { id: 'centretown', label: 'Centretown', coords: { lat: 45.415, lng: -75.695 } },
   { id: 'kanata', label: 'Kanata', coords: { lat: 45.318, lng: -75.905 } },
   { id: 'barrhaven', label: 'Barrhaven', coords: { lat: 45.275, lng: -75.745 } },
   { id: 'stittsville', label: 'Stittsville', coords: { lat: 45.26, lng: -75.92 } },
   { id: 'nepean', label: 'Nepean', coords: { lat: 45.35, lng: -75.76 } },
   { id: 'orleans', label: 'Orléans', coords: { lat: 45.47, lng: -75.52 } },
-  { id: 'glebe', label: 'Glebe', coords: DEFAULT_OTTAWA_CENTER },
-  { id: 'centretown', label: 'Centretown', coords: { lat: 45.415, lng: -75.695 } },
 ];
 
 export type ManualArea = {
@@ -240,23 +250,45 @@ async function readBrowserPosition(opts?: {
   });
 }
 
-function explainGeoError(code?: number, message?: string): string {
+export function explainGeoError(code?: number, message?: string): string {
   // 1 PERMISSION_DENIED, 2 POSITION_UNAVAILABLE, 3 TIMEOUT
+  // Never describe the central-Ottawa fallback as the visitor's real location.
   if (code === 1) {
-    return 'Location is blocked for this site. Click the lock icon in the address bar → Location → Allow, then try again.';
+    return 'Location is blocked for this site. Pick your neighbourhood below, or allow location in the address bar and try again.';
   }
   if (code === 2) {
-    return 'Browser allowed the site, but Windows couldn’t get a fix. Turn on Settings → Privacy & security → Location, then try again — or pick your area below.';
+    return 'This browser couldn’t get a GPS fix. Pick your neighbourhood — the board is still on a central Ottawa starting point, not your location.';
   }
   if (code === 3) {
-    return 'Location timed out. Try again, or pick your area below (Kanata, Barrhaven…).';
+    return 'Location timed out. Pick your neighbourhood below. The board is showing a central Ottawa starting point until you do.';
   }
-  return message || 'Couldn’t get GPS. Pick your area below.';
+  return message || 'Couldn’t get GPS. Pick your neighbourhood below.';
+}
+
+export type LocationSource = 'gps' | 'manual' | 'fallback';
+
+/** Copy for the near-you line. Fallback never names a suburb as “you are near”. */
+export function nearYouStatus(source: LocationSource, area: string): {
+  label: string;
+  value: string;
+  detail: string | null;
+} {
+  if (source === 'fallback') {
+    return {
+      label: 'Location not set',
+      value: FALLBACK_START_LABEL,
+      detail: FALLBACK_START_DETAIL,
+    };
+  }
+  if (source === 'manual') {
+    return { label: 'Your area', value: area, detail: null };
+  }
+  return { label: 'You are near', value: area, detail: null };
 }
 
 export type UserLocationResult = {
   coords: LatLng;
-  source: 'gps' | 'manual' | 'fallback';
+  source: LocationSource;
   area: string;
   permission: 'granted' | 'denied' | 'undetermined';
   fromCache?: boolean;
@@ -332,7 +364,7 @@ export async function getUserLocation(opts?: {
       return {
         coords: DEFAULT_OTTAWA_CENTER,
         source: 'fallback',
-        area: areaLabel(DEFAULT_OTTAWA_CENTER),
+        area: FALLBACK_START_LABEL,
         permission: fix.errorCode === 1 ? 'denied' : 'undetermined',
         errorHint: hint,
       };
@@ -349,9 +381,10 @@ export async function getUserLocation(opts?: {
       return {
         coords: DEFAULT_OTTAWA_CENTER,
         source: 'fallback',
-        area: areaLabel(DEFAULT_OTTAWA_CENTER),
+        area: FALLBACK_START_LABEL,
         permission: 'denied',
-        errorHint: 'Location permission denied. Enable it in system settings, or pick an area.',
+        errorHint:
+          'Location permission denied. Pick your neighbourhood — this isn’t your GPS location yet.',
       };
     }
 
@@ -382,9 +415,10 @@ export async function getUserLocation(opts?: {
     return {
       coords: DEFAULT_OTTAWA_CENTER,
       source: 'fallback',
-      area: areaLabel(DEFAULT_OTTAWA_CENTER),
+      area: FALLBACK_START_LABEL,
       permission: 'denied',
-      errorHint: 'Couldn’t get GPS. Pick your area below.',
+      errorHint:
+        'Couldn’t get GPS. Pick your neighbourhood. The board is showing a central Ottawa starting point until you do.',
     };
   }
 }

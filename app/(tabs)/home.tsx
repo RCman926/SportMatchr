@@ -19,7 +19,7 @@ import { SafetyGate } from '../../components/SafetyGate';
 import { SportFilterBar } from '../../components/SportPicker';
 import { useLocationStore } from '../../lib/locationStore';
 import { useAuthStore } from '../../lib/authStore';
-import { AREA_PRESETS, formatDistanceKm, haversineKm, courtCoords } from '../../lib/location';
+import { AREA_PRESETS, formatDistanceKm, haversineKm, courtCoords, nearYouStatus } from '../../lib/location';
 import { AreaChoice, resolveAreaQuery, suggestLocalAreas } from '../../lib/ottawaAreas';
 import {
   joinSession,
@@ -75,6 +75,12 @@ export default function HomeScreen() {
   const refreshLoc = useLocationStore((s) => s.refresh);
   const setManualArea = useLocationStore((s) => s.setManualArea);
   const setCustomArea = useLocationStore((s) => s.setCustomArea);
+  const near = nearYouStatus(locSource, area);
+  const locationUnset = locSource === 'fallback';
+
+  useEffect(() => {
+    if (!locLoading && locationUnset) setAreaOpen(true);
+  }, [locLoading, locationUnset]);
 
   const applyAreaChoice = useCallback((choice: AreaChoice) => {
     setCustomArea(choice.label, choice.coords);
@@ -244,7 +250,13 @@ export default function HomeScreen() {
         <PageHero
           sport={sportFilter}
           title="SportMatchr"
-          caption={sportFilter ? sportFilter : `${area} · free public places`}
+          caption={
+            sportFilter
+              ? sportFilter
+              : locationUnset
+                ? 'Ottawa · free public places'
+                : `${area} · free public places`
+          }
         />
 
         <LookingPulse />
@@ -323,23 +335,32 @@ export default function HomeScreen() {
 
         <View style={styles.locBar}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.locLabel}>Near</Text>
-            <Text style={styles.locValue}>{area}</Text>
+            <Text style={styles.locLabel}>{near.label}</Text>
+            <Text style={styles.locValue}>{near.value}</Text>
           </View>
           <TouchableOpacity
-            style={styles.locBtn}
+            style={[styles.locBtn, locationUnset && styles.locBtnEmphasis]}
             onPress={() => setAreaOpen((v) => !v)}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={
+              areaOpen ? 'Hide neighbourhood picker' : locationUnset ? 'Pick neighbourhood' : 'Change area'
+            }
           >
-            <Text style={styles.locBtnText}>{areaOpen ? 'Hide' : 'Change'}</Text>
+            <Text style={[styles.locBtnText, locationUnset && styles.locBtnTextEmphasis]}>
+              {areaOpen ? 'Hide' : locationUnset ? 'Pick neighbourhood' : 'Change area'}
+            </Text>
           </TouchableOpacity>
         </View>
+        {locationUnset && near.detail ? (
+          <Text style={styles.locUnset}>{near.detail}</Text>
+        ) : null}
         {areaOpen ? (
           <View style={styles.locHelp}>
-            {needsLocation || locSource === 'fallback' || locErrorHint ? (
+            {locationUnset || locErrorHint ? (
               <Text style={styles.locWarn}>
                 {locErrorHint ||
-                  'GPS isn’t set yet. Type your neighbourhood, tap a shortcut, or Use my location.'}
+                  'Share your location, type your neighbourhood, or tap Glebe or Centretown.'}
               </Text>
             ) : (
               <Text style={styles.locHint}>Type any Ottawa area, or quick-pick:</Text>
@@ -459,8 +480,9 @@ export default function HomeScreen() {
               Start tonight’s{sportFilter ? ` ${sportFilter}` : ''} board
             </Text>
             <Text style={styles.emptyInviteBody}>
-              Pick a free public place near {area}. People can join the chat, or you can say you’re
-              free on Looking.
+              Pick a free public place
+              {locationUnset ? ' around central Ottawa' : ` near ${area}`}. People can join the chat,
+              or you can say you’re free on Looking.
             </Text>
             <View style={styles.emptyMarks}>
               {getSeasonalPopularSports().slice(0, 4).map((s) => (
@@ -550,7 +572,9 @@ export default function HomeScreen() {
             activeOpacity={0.85}
             onPress={() => setPlacesOpen(true)}
           >
-            <Text style={styles.showPlacesText}>Show free places near you</Text>
+            <Text style={styles.showPlacesText}>
+              {locationUnset ? 'Show free places from central Ottawa' : 'Show free places near you'}
+            </Text>
           </TouchableOpacity>
         ) : null}
 
@@ -560,7 +584,8 @@ export default function HomeScreen() {
           <>
         <View style={styles.sectionRow}>
           <Text style={[styles.section, { flex: 1, marginBottom: 0 }]}>
-            Free places near you{sportFilter ? ` · ${sportFilter}` : ''}
+            {locationUnset ? 'Free places from central Ottawa' : 'Free places near you'}
+            {sportFilter ? ` · ${sportFilter}` : ''}
           </Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/map')} activeOpacity={0.85}>
             <Text style={styles.sectionLink}>Map</Text>
@@ -819,11 +844,13 @@ const styles = StyleSheet.create({
   },
   locBtn: {
     backgroundColor: theme.accentSoft,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderRadius: theme.radius.sm,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.accent,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   locBtnEmphasis: {
     backgroundColor: theme.ball,
@@ -832,7 +859,15 @@ const styles = StyleSheet.create({
   locBtnText: {
     color: theme.accentDark,
     fontFamily: theme.fonts.bodyBold,
-    fontSize: 12,
+    fontSize: 14,
+  },
+  locUnset: {
+    fontFamily: theme.fonts.body,
+    fontSize: 14,
+    color: theme.ink,
+    lineHeight: 20,
+    marginTop: -6,
+    marginBottom: 12,
   },
   locBtnTextEmphasis: {
     color: '#FFFFFF',
